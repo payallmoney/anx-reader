@@ -14,9 +14,7 @@ import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/page/search/search_page.dart';
-import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
-import 'package:anx_reader/utils/platform_utils.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/widgets/bookshelf/book_bottom_sheet.dart';
 import 'package:anx_reader/widgets/bookshelf/book_folder.dart';
@@ -34,7 +32,6 @@ import 'package:flutter_reorderable_grid_view/widgets/custom_draggable.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsx_plus/iconsx_plus.dart';
-import 'package:path/path.dart' as p;
 
 class BookshelfPage extends ConsumerStatefulWidget {
   const BookshelfPage({super.key, this.controller});
@@ -61,19 +58,6 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     super.dispose();
   }
 
-  Future<File> _copyToTempFile({
-    required String sourcePath,
-    required String fileName,
-  }) async {
-    final tempDir = await getAnxTempDir();
-    final targetPath = p.join(tempDir.path, fileName);
-    final targetFile = File(targetPath);
-    if (await targetFile.exists()) {
-      await targetFile.delete();
-    }
-    return File(sourcePath).copy(targetPath);
-  }
-
   Future<void> _importBook() async {
     FilePickerResult? result;
     try {
@@ -93,19 +77,42 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
     List<PlatformFile> files = result.files;
     AnxLog.info('importBook files: ${files.toString()}');
-    List<File> fileList = [];
-    // FilePicker on Windows will return files with original path,
-    // but on Android it will return files with temporary path.
-    // So we need to save the files to the temp directory.
-    if (!AnxPlatform.isAndroid) {
-      fileList = await Future.wait(files.map((file) async {
-        return _copyToTempFile(sourcePath: file.path!, fileName: file.name);
-      }).toList());
-    } else {
-      fileList = files.map((file) => File(file.path!)).toList();
+    // Books are referenced in place; picker cache copies are imported into
+    // app storage by saveBook when they have no durable original.
+    final fileList = files.map((file) => File(file.path!)).toList();
+
+    if (!mounted) return;
+    importBookList(fileList, context, ref);
+  }
+
+  Future<void> _importFolder() async {
+    String? directoryPath;
+    try {
+      directoryPath = await FilePicker.platform.getDirectoryPath();
+    } catch (e) {
+      if (!mounted) return;
+      AnxToast.show(L10n.of(context).filePickerFailed(e.toString()));
+      return;
     }
 
-    importBookList(fileList, context, ref);
+    if (directoryPath == null) {
+      return;
+    }
+
+    final dir = Directory(directoryPath);
+    if (!await dir.exists()) {
+      if (!mounted) return;
+      AnxToast.show(L10n.of(context).importFolderNotAccessible);
+      return;
+    }
+
+    final files = await collectBookFiles([directoryPath]);
+    if (files.isEmpty) {
+      return;
+    }
+
+    if (!mounted) return;
+    importBookList(files, context, ref);
   }
 
   @override
@@ -482,13 +489,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
         Expanded(
           child: DropTarget(
             onDragDone: (detail) async {
-              List<File> files = [];
-              for (var file in detail.files) {
-                files.add(await _copyToTempFile(
-                  sourcePath: file.path,
-                  fileName: file.name,
-                ));
-              }
+              // dropped items may include directories; expand them
+              // recursively so every book in subdirectories is loaded
+              final files = await collectBookFiles(
+                  detail.files.map((file) => file.path).toList());
+              if (!mounted) return;
               importBookList(files, context, ref);
               setState(() {
                 _dragging = false;
@@ -569,9 +574,26 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           )),
       actions: [
         const SyncButton(),
-        IconButton(
+        PopupMenuButton(
           icon: const Icon(Icons.add),
-          onPressed: _importBook,
+          initialValue: 0,
+          onSelected: (value) {
+            if (value == 0) {
+              _importBook();
+            } else if (value == 1) {
+              _importFolder();
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 0,
+              child: Text(L10n.of(context).importFiles),
+            ),
+            PopupMenuItem(
+              value: 1,
+              child: Text(L10n.of(context).importFromFolder),
+            ),
+          ],
         ),
         IconButton(
             icon: const Icon(Icons.sort),

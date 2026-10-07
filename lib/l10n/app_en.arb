@@ -266,6 +266,12 @@
   "importCannotGetFilePath": "Cannot get file path",
   "importSuccessRestartApp": "Import success, please restart the app",
   "importFailed": "Import failed: {error}",
+  "importFiles": "Import files",
+  "importFromFolder": "Import from folder",
+  "importFolderNotAccessible": "Could not access the selected folder.",
+  "deleteBookAlsoDeleteFile": "Delete the original file as well?",
+  "deleteBookRemoveOnly": "Remove from library only",
+  "deleteBookWithFile": "Delete file",
   "filePickerFailed": "Could not open the file picker. On Linux install zenity or kdialog.\n{error}",
   "@filePickerFailed": {
     "placeholders": {
@@ -484,6 +490,7 @@
   "bookSyncStatusBookNotFoundRemote": "Could not find this book in the cloud",
   "bookSyncStatusDownloadingBook": "Downloading {fileName}",
   "bookSyncStatusSpaceReleased": "Space released",
+  "bookSyncStatusInPlaceNotManaged": "This book is imported in place and stays at its original location; there is no local copy to release.",
   "bookSyncStatusUploadFailed": "Upload failed",
   "bookSyncStatusBooksCount": "{count} books",
   "bookSyncStatusDownloadFailed": "Download failed",

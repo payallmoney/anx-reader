@@ -266,6 +266,12 @@
   "importCannotGetFilePath": "无法获取文件路径",
   "importSuccessRestartApp": "导入成功，请重启应用",
   "importFailed": "导入失败: {error}",
+  "importFiles": "导入文件",
+  "importFromFolder": "导入文件夹",
+  "importFolderNotAccessible": "无法读取所选文件夹。",
+  "deleteBookAlsoDeleteFile": "是否同时删除原文件？",
+  "deleteBookRemoveOnly": "仅移出书库",
+  "deleteBookWithFile": "删除原文件",
   "filePickerFailed": "无法打开文件选择器。Linux 请安装 zenity 或 kdialog。\n{error}",
   "@filePickerFailed": {
     "placeholders": {
@@ -484,6 +490,7 @@
   "bookSyncStatusBookNotFoundRemote": "没有在云端找到这本书",
   "bookSyncStatusDownloadingBook": "正在下载 {fileName}",
   "bookSyncStatusSpaceReleased": "已释放空间",
+  "bookSyncStatusInPlaceNotManaged": "此书籍为原位导入，保留在原位置，没有可释放的本地副本。",
   "bookSyncStatusUploadFailed": "上传失败",
   "bookSyncStatusBooksCount": "{count} 本",
   "bookSyncStatusDownloadFailed": "下载失败",

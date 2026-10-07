@@ -627,16 +627,26 @@ class Sync extends _$Sync {
   }
 
   Future<void> releaseBook(Book book) async {
+    // in-place imports live on the user's disk and are not managed by the
+    // app's WebDAV file sync; releasing space must not touch them
+    if (book.isInPlaceImport) {
+      AnxLog.info(
+          'WebDAV: skip releasing in-place imported book ${book.filePath}');
+      AnxToast.show(L10n.of(navigatorKey.currentContext!)
+          .bookSyncStatusInPlaceNotManaged);
+      return;
+    }
+
     final syncStatus = await ref.read(syncStatusProvider.future);
 
     Future<void> deleteLocalBook() async {
-      await io.File(getBasePath(book.filePath)).delete();
+      await io.File(book.fileFullPath).delete();
     }
 
     Future<void> uploadBook() async {
       try {
         final remotePath = 'anx/data/${book.filePath}';
-        final localPath = getBasePath(book.filePath);
+        final localPath = book.fileFullPath;
         await uploadFile(localPath, remotePath);
       } catch (e) {
         AnxToast.show(
@@ -706,7 +716,7 @@ class Sync extends _$Sync {
       AnxToast.show(L10n.of(navigatorKey.currentContext!)
           .bookSyncStatusDownloadingBook(book.filePath));
       final remotePath = 'anx/data/${book.filePath}';
-      final localPath = getBasePath(book.filePath);
+      final localPath = book.fileFullPath;
       await downloadFile(remotePath, localPath);
     } catch (e) {
       AnxToast.show(

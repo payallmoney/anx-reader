@@ -265,6 +265,12 @@
   "importCannotGetFilePath": "無法取得檔案路徑",
   "importSuccessRestartApp": "匯入成功，請重新啟動 App。",
   "importFailed": "匯入失敗：{error}",
+  "importFiles": "匯入文件",
+  "importFromFolder": "匯入資料夾",
+  "importFolderNotAccessible": "無法讀取所選資料夾。",
+  "deleteBookAlsoDeleteFile": "是否同時刪除原始檔案？",
+  "deleteBookRemoveOnly": "僅移出書庫",
+  "deleteBookWithFile": "刪除原始檔案",
   "filePickerFailed": "無法開啟檔案選擇器。Linux 請安裝 zenity 或 kdialog。\n{error}",
   "@filePickerFailed": {
     "placeholders": {
@@ -435,6 +441,7 @@
   "bookSyncStatusBookNotFoundRemote": "在雲端找不到此書籍",
   "bookSyncStatusDownloadingBook": "正在下載 {fileName}",
   "bookSyncStatusSpaceReleased": "已釋放空間",
+  "bookSyncStatusInPlaceNotManaged": "此書籍為原位匯入，保留在原位置，沒有可釋放的本地副本。",
   "bookSyncStatusUploadFailed": "上傳失敗",
   "bookSyncStatusBooksCount": "{count} 本書",
   "bookSyncStatusDownloadFailed": "下載失敗",

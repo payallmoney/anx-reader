@@ -1,4 +1,5 @@
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
+import 'package:path/path.dart' as p;
 
 class Book {
   int id;
@@ -52,8 +53,12 @@ class Book {
     return getBasePath(coverPath);
   }
 
+  /// Books imported in place record the original absolute path of the file
+  /// on the user's disk; legacy entries keep a storage-relative path.
+  bool get isInPlaceImport => p.isAbsolute(filePath);
+
   String get fileFullPath {
-    return getBasePath(filePath);
+    return isInPlaceImport ? filePath : getBasePath(filePath);
   }
 
   Map<String, Object?> toMap() {

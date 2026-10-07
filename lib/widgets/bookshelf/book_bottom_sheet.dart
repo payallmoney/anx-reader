@@ -38,6 +38,34 @@ class BookBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> handleDelete(BuildContext context) async {
+      // ask whether the stored files should be removed too;
+      // declining removes the book from the library only
+      final alsoDeleteFile = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(L10n.of(dialogContext).commonDelete),
+          content:
+              Text(L10n.of(dialogContext).deleteBookAlsoDeleteFile),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, null),
+              child: Text(L10n.of(dialogContext).commonCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(L10n.of(dialogContext).deleteBookRemoveOnly),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(L10n.of(dialogContext).deleteBookWithFile),
+            ),
+          ],
+        ),
+      );
+      if (alsoDeleteFile == null) {
+        return;
+      }
+      if (!context.mounted) return;
       Navigator.pop(context);
       await bookDao.updateBook(Book(
         id: book.id,
@@ -55,8 +83,16 @@ class BookBottomSheet extends ConsumerWidget {
         updateTime: DateTime.now(),
       ));
       ref.read(bookListProvider.notifier).refresh();
-      File(book.fileFullPath).delete();
-      File(book.coverFullPath).delete();
+      if (alsoDeleteFile) {
+        final bookFile = File(book.fileFullPath);
+        if (await bookFile.exists()) {
+          await bookFile.delete();
+        }
+        final coverFile = File(book.coverFullPath);
+        if (await coverFile.exists()) {
+          await coverFile.delete();
+        }
+      }
     }
 
     void handleDetail(BuildContext context) {
@@ -217,22 +253,30 @@ class BookBottomSheet extends ConsumerWidget {
           extension = '.epub';
         }
 
-        String title = book.title;
-        String nameWithoutExtension =
-            '${title.length > 20 ? title.substring(0, 20) : title}-${DateTime.now().millisecondsSinceEpoch}'
-                .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
-                .replaceAll('\n', '')
-                .replaceAll('\r', '')
-                .trim();
-        String newFileName = '$nameWithoutExtension$extension';
-        String newRelativePath = 'file/$newFileName';
-        String newDestPath = getBasePath(newRelativePath);
+        // In place: reference the picked file directly. Converted files only
+        // exist in the app temp dir, so import them into app storage.
+        String newRelativePath;
+        if (await isAppTempFile(fileToProcess.path)) {
+          String title = book.title;
+          String nameWithoutExtension =
+              '${title.length > 20 ? title.substring(0, 20) : title}-${DateTime.now().millisecondsSinceEpoch}'
+                  .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+                  .replaceAll('\n', '')
+                  .replaceAll('\r', '')
+                  .trim();
+          newRelativePath = 'file/$nameWithoutExtension$extension';
+          await fileToProcess.copy(getBasePath(newRelativePath));
+          await fileToProcess.delete();
+        } else {
+          newRelativePath = fileToProcess.path;
+        }
 
-        // Copy new file
-        await fileToProcess.copy(newDestPath);
+        final newFullPath = p.isAbsolute(newRelativePath)
+            ? newRelativePath
+            : getBasePath(newRelativePath);
 
         // Calculate MD5
-        String? newMd5 = await MD5Service.calculateFileMd5(newDestPath);
+        String? newMd5 = await MD5Service.calculateFileMd5(newFullPath);
 
         // Update DB
         await bookDao.updateBook(book.copyWith(
@@ -241,18 +285,12 @@ class BookBottomSheet extends ConsumerWidget {
           updateTime: DateTime.now(),
         ));
 
-        // Delete old file if path is different
-        if (book.fileFullPath != newDestPath) {
+        // Delete the previous file only when it is app-managed storage;
+        // in-place originals stay on the user's disk
+        if (!book.isInPlaceImport && book.fileFullPath != newFullPath) {
           final oldFile = File(book.fileFullPath);
           if (await oldFile.exists()) {
             await oldFile.delete();
-          }
-        }
-
-        // Clean up temporary file if TXT conversion happened
-        if (fileToProcess != newFileObj) {
-          if (await fileToProcess.exists()) {
-            await fileToProcess.delete();
           }
         }
 

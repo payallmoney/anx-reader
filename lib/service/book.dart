@@ -22,6 +22,7 @@ import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/utils/webView/anx_headless_webview.dart';
 import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
+import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/utils/import_book.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -37,7 +38,9 @@ import 'book_player/book_player_server.dart';
 AnxHeadlessWebView? headlessInAppWebView;
 final allowBookExtensions = ["epub", "mobi", "azw3", "fb2", "txt", "pdf"];
 
-/// import book list and **delete file**
+/// import book list. Books already on the user's filesystem are referenced
+/// in place; only ephemeral files (picker cache, share attachments, txt
+/// conversions) are copied into app storage by [saveBook].
 void importBookList(List<File> fileList, BuildContext context, WidgetRef ref) {
   AnxLog.info('importBook fileList: ${fileList.toString()}');
 
@@ -58,6 +61,30 @@ void importBookList(List<File> fileList, BuildContext context, WidgetRef ref) {
     context,
     ref,
   );
+}
+
+/// Expands paths into book files, recursing into subdirectories so that
+/// every supported book under a dropped/picked folder is loaded.
+Future<List<File>> collectBookFiles(List<String> paths) async {
+  final result = <File>[];
+  for (final rawPath in paths) {
+    if (rawPath.isEmpty) continue;
+    final type = FileSystemEntity.typeSync(rawPath, followLinks: true);
+    if (type == FileSystemEntityType.directory) {
+      final dir = Directory(rawPath);
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        if (!allowBookExtensions
+            .contains(entity.path.split('.').last.toLowerCase())) {
+          continue;
+        }
+        result.add(entity);
+      }
+    } else if (type == FileSystemEntityType.file) {
+      result.add(File(rawPath));
+    }
+  }
+  return result;
 }
 
 void _checkDuplicatesAndShowDialog(
@@ -134,11 +161,6 @@ void _showImportDialog(
   List<File> fileList,
   WidgetRef ref,
 ) {
-  // delete unsupported files
-  for (var file in unsupportedFiles) {
-    file.deleteSync();
-  }
-
   BuildContext context = navigatorKey.currentContext!;
 
   Widget bookItem(
@@ -376,14 +398,9 @@ void _showImportDialog(
                         }
                       }
 
-                      // dumplicateFiles will be deleted if skipDuplicates is true
-                      // if skipDuplicates is false, they will be imported
-                      // and then deleted in the importBook function
-                      if (skipDuplicates) {
-                        for (var file in duplicateFiles) {
-                          file.deleteSync();
-                        }
-                      }
+                      // duplicate files stay untouched on the user's disk
+                      // when skipDuplicates is true; otherwise they are
+                      // re-imported in place
 
                       setState(() {
                         finished = true;
@@ -408,8 +425,10 @@ Future<void> importBook(File file, WidgetRef ref) async {
   String? md5 = await MD5Service.calculateFileMd5(file.path);
 
   if (file.path.split('.').last == 'txt') {
+    // txt is not directly readable by the reader pipeline; the converted
+    // epub lands in the app temp dir and is imported into app storage by
+    // saveBook. The original txt is never touched.
     final tempFile = await convertFromTxt(file);
-    file.deleteSync();
     file = tempFile;
   }
 
@@ -493,6 +512,15 @@ Future<void> resetBookCover(Book book) async {
   getBookMetadata(file);
 }
 
+/// Whether [filePath] lives inside the app's temp/cache directory, i.e. it
+/// has no durable original on the user's disk (picker copies, share
+/// attachments, converted files) and must be imported into app storage.
+Future<bool> isAppTempFile(String filePath) async {
+  final tempDir = await getAnxTempDir();
+  final dir = path.dirname(filePath);
+  return path.equals(dir, tempDir.path) || path.isWithin(tempDir.path, dir);
+}
+
 Future<void> saveBook(
   File file,
   String title,
@@ -518,14 +546,23 @@ Future<void> saveBook(
 
   final extension = file.path.split('.').last;
 
-  final dbFilePath = 'file/$newBookName.$extension';
-  final filePath = getBasePath(dbFilePath);
+  // Books already on the user's filesystem are referenced in place: the
+  // database records the original absolute path (preserving the full
+  // multi-level directory structure) and nothing is copied. Files that only
+  // exist in the app's temp/cache directory (system picker copies, share
+  // attachments, converted txt) have no durable original and are still
+  // imported into app storage under the legacy `file/` layout.
+  String dbFilePath;
+  if (await isAppTempFile(file.path)) {
+    dbFilePath = 'file/$newBookName.$extension';
+    await file.copy(getBasePath(dbFilePath));
+    // remove cached file
+    file.delete();
+  } else {
+    dbFilePath = file.path;
+  }
   String? dbCoverPath = 'cover/$newBookName';
   // final coverPath = getBasePath(dbCoverPath);
-
-  await file.copy(filePath);
-  // remove cached file
-  file.delete();
 
   dbCoverPath = await saveImageToLocal(cover, dbCoverPath);
   if (md5 != null) {
