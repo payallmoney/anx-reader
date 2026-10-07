@@ -7,6 +7,7 @@ import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/enums/sync_protocol.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/main.dart';
+import 'package:anx_reader/page/webdav_browser_page.dart';
 import 'package:anx_reader/providers/sync.dart';
 import 'package:anx_reader/service/sync/sync_client_factory.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
@@ -14,6 +15,7 @@ import 'package:anx_reader/utils/save_file_to_download.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/utils/get_path/databases_path.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
+import 'package:anx_reader/utils/get_path/webdav_download_dir.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/sync_test_helper.dart';
 import 'package:anx_reader/utils/toast/common.dart';
@@ -433,6 +435,49 @@ void showWebdavDialog(BuildContext context) {
               webdavUsernameController),
           buildTextField(L10n.of(context).settingsSyncWebdavPassword,
               webdavPasswordController),
+          FutureBuilder<String>(
+            future: webdavDownloadDirLabel(),
+            builder: (context, snapshot) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.download),
+              title: Text(L10n.of(context).webdavDownloadDirLabel),
+              subtitle: Text(
+                snapshot.data ?? '',
+                style: Theme.of(context).textTheme.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () async {
+                final result = await FilePicker.platform.getDirectoryPath();
+                if (result != null) {
+                  Prefs().webdavDownloadPath = result;
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    showWebdavDialog(context);
+                  }
+                }
+              },
+              onLongPress: () {
+                // reset to the default download location
+                Prefs().webdavDownloadPath = null;
+                Navigator.pop(context);
+                showWebdavDialog(context);
+              },
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  openWebdavBrowser();
+                },
+                icon: const Icon(Icons.folder_open),
+                label: Text(L10n.of(context).webdavBrowserTitle),
+              ),
+            ],
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [

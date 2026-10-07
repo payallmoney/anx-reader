@@ -38,34 +38,8 @@ class BookBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> handleDelete(BuildContext context) async {
-      // ask whether the stored files should be removed too;
-      // declining removes the book from the library only
-      final alsoDeleteFile = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(L10n.of(dialogContext).commonDelete),
-          content:
-              Text(L10n.of(dialogContext).deleteBookAlsoDeleteFile),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, null),
-              child: Text(L10n.of(dialogContext).commonCancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(L10n.of(dialogContext).deleteBookRemoveOnly),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(L10n.of(dialogContext).deleteBookWithFile),
-            ),
-          ],
-        ),
-      );
-      if (alsoDeleteFile == null) {
-        return;
-      }
-      if (!context.mounted) return;
+      // removing from the library only: neither the imported file nor an
+      // in-place original on the user's disk is ever deleted
       Navigator.pop(context);
       await bookDao.updateBook(Book(
         id: book.id,
@@ -83,16 +57,6 @@ class BookBottomSheet extends ConsumerWidget {
         updateTime: DateTime.now(),
       ));
       ref.read(bookListProvider.notifier).refresh();
-      if (alsoDeleteFile) {
-        final bookFile = File(book.fileFullPath);
-        if (await bookFile.exists()) {
-          await bookFile.delete();
-        }
-        final coverFile = File(book.coverFullPath);
-        if (await coverFile.exists()) {
-          await coverFile.delete();
-        }
-      }
     }
 
     void handleDetail(BuildContext context) {

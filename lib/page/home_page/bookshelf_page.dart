@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/dao/book.dart';
+import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/enums/hint_key.dart';
 import 'package:anx_reader/enums/sort_field.dart';
 import 'package:anx_reader/enums/sort_order.dart';
@@ -10,12 +12,16 @@ import 'package:anx_reader/main.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/tag.dart';
 import 'package:anx_reader/providers/book_list.dart';
+import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
 import 'package:anx_reader/utils/log/common.dart';
+import 'package:anx_reader/utils/platform_utils.dart';
+import 'package:anx_reader/utils/saf_tree.dart';
+import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/widgets/bookshelf/book_bottom_sheet.dart';
 import 'package:anx_reader/widgets/bookshelf/book_folder.dart';
 import 'package:anx_reader/widgets/bookshelf/sync_button.dart';
@@ -27,6 +33,7 @@ import 'package:anx_reader/widgets/tips/bookshelf_tips.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:anx_reader/utils/toast/common.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reorderable_grid_view/widgets/custom_draggable.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
@@ -48,6 +55,71 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _dragging = false;
   final GlobalKey _tagButtonKey = GlobalKey();
   final TextEditingController _editTagController = TextEditingController();
+
+  // multi-select mode for batch operations (delete)
+  bool _selectMode = false;
+  final Set<int> _selectedBookIds = {};
+
+  void _enterSelectMode(int bookId) {
+    setState(() {
+      _selectMode = true;
+      _selectedBookIds
+        ..clear()
+        ..add(bookId);
+    });
+  }
+
+  void _exitSelectMode() {
+    setState(() {
+      _selectMode = false;
+      _selectedBookIds.clear();
+    });
+  }
+
+  void _toggleSelected(int bookId) {
+    setState(() {
+      if (!_selectedBookIds.remove(bookId)) {
+        _selectedBookIds.add(bookId);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedBooks(List<List<Book>> books) async {
+    if (_selectedBookIds.isEmpty) return;
+    final count = _selectedBookIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(L10n.of(dialogContext).commonDelete),
+        content:
+            Text(L10n.of(dialogContext).deleteBooksRemoveOnly(count)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(L10n.of(dialogContext).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(L10n.of(dialogContext).commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    for (final id in _selectedBookIds.toList()) {
+      try {
+        final book = await bookDao.selectBookById(id);
+        // removing from the library only; files are never deleted
+        await bookDao.updateBook(
+            book.copyWith(isDeleted: true, updateTime: DateTime.now()));
+      } catch (e) {
+        AnxLog.warning('multi delete: book $id failed: $e');
+      }
+    }
+    ref.read(bookListProvider.notifier).refresh();
+    _exitSelectMode();
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -87,6 +159,19 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Future<void> _importFolder() async {
     String? directoryPath;
+
+    // On Android, file_picker converts the SAF tree uri into a plain path
+    // that scoped storage forbids listing; pick the raw tree uri instead
+    // and enumerate through the native SAF channel.
+    if (AnxPlatform.isAndroid) {
+      final treeUri = await SafTree.pickDirectory();
+      if (treeUri == null) {
+        return;
+      }
+      await _importSafTree(treeUri);
+      return;
+    }
+
     try {
       directoryPath = await FilePicker.platform.getDirectoryPath();
     } catch (e) {
@@ -99,6 +184,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
+    if (SafTree.isTreeUri(directoryPath)) {
+      await _importSafTree(directoryPath);
+      return;
+    }
+
     final dir = Directory(directoryPath);
     if (!await dir.exists()) {
       if (!mounted) return;
@@ -108,11 +198,155 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
     final files = await collectBookFiles([directoryPath]);
     if (files.isEmpty) {
+      if (!mounted) return;
+      AnxToast.show(L10n.of(context).importFolderNoBooks);
       return;
     }
 
     if (!mounted) return;
     importBookList(files, context, ref);
+  }
+
+  Future<void> _importSafTree(String treeUri) async {
+    SafTreeListing listing;
+    try {
+      listing = await SafTree.listBookFiles(treeUri);
+    } catch (e) {
+      if (!mounted) return;
+      AnxToast.show(L10n.of(context).importFolderNotAccessible);
+      return;
+    }
+    if (listing.files.isEmpty) {
+      if (!mounted) return;
+      AnxToast.show(L10n.of(context).importFolderNoBooks);
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(listing.rootName),
+        content: Text(L10n.of(dialogContext)
+            .importImportNBooks(listing.files.length)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(L10n.of(dialogContext).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(L10n.of(dialogContext)
+                .importImportNBooks(listing.files.length)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // books from the picked folder are stored under a subdirectory named
+    // after the folder itself
+    final subDirName = listing.rootName
+        .replaceAll(RegExp(r'[<>:"/\\|?*#%&@$^+=\[\]{}`~;!]'), '_')
+        .trim();
+    final subDir =
+        subDirName.isEmpty ? 'file' : 'file/$subDirName';
+    final destDir = getBasePath(subDir);
+    await Directory(destDir).create(recursive: true);
+
+    var imported = 0;
+    var failed = 0;
+    final importedMd5s = <String>[];
+    SmartDialog.showLoading(
+        msg: L10n.of(context).importCopyingBooks(0, listing.files.length));
+    try {
+      for (var i = 0; i < listing.files.length; i++) {
+        if (!mounted) break;
+        final entry = listing.files[i];
+        SmartDialog.showLoading(
+            msg: L10n.of(context).importCopyingBooks(i + 1, listing.files.length));
+        try {
+          final copied =
+              await SafTree.copyToDir(entry.uri, entry.name, destDir);
+          await importBook(
+            File(copied.path),
+            ref,
+            precomputedMd5: copied.md5,
+            storageSubDir: subDir,
+          );
+          importedMd5s.add(copied.md5);
+          imported++;
+        } catch (e) {
+          failed++;
+          AnxLog.severe('SAF import: failed ${entry.name}: $e');
+        }
+      }
+    } finally {
+      SmartDialog.dismiss(status: SmartStatus.loading);
+    }
+    if (!mounted) return;
+    await _groupImportedBooks(subDirName, importedMd5s);
+    if (failed > 0) {
+      AnxToast.show(
+          '${L10n.of(context).serviceImportSuccess} ($imported), failed: $failed');
+    }
+  }
+
+  /// Put a batch of imported books into a shelf folder named after the
+  /// source folder; the folder is created when missing. Group ids follow
+  /// the app convention of reusing a member book's id.
+  Future<void> _groupImportedBooks(
+      String groupName, List<String> md5s) async {
+    if (groupName.isEmpty || md5s.isEmpty) return;
+    try {
+      final db = await DBHelper().database;
+      final bookIds = <int>[];
+      for (final md5 in md5s) {
+        // importBook returns before the webview metadata callback inserts
+        // the row, so wait briefly for the book to appear
+        for (var i = 0; i < 25; i++) {
+          final book = await bookDao.getBookByMd5(md5);
+          if (book != null && !book.isDeleted) {
+            bookIds.add(book.id);
+            break;
+          }
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+      }
+      if (bookIds.isEmpty) return;
+
+      final existing = await db.query('tb_groups',
+          where: 'name = ? AND is_deleted = 0',
+          whereArgs: [groupName],
+          limit: 1);
+      int groupId;
+      if (existing.isNotEmpty) {
+        groupId = existing.first['id'] as int;
+      } else {
+        groupId = bookIds.first;
+        final now = DateTime.now().toIso8601String();
+        await db.insert('tb_groups', {
+          'id': groupId,
+          'name': groupName,
+          'parent_id': 0,
+          'is_deleted': 0,
+          'create_time': now,
+          'update_time': now,
+        });
+      }
+      for (final id in bookIds) {
+        await db.update(
+          'tb_books',
+          {'group_id': groupId, 'update_time': DateTime.now().toIso8601String()},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+      ref.invalidate(groupDaoProvider);
+      ref.read(bookListProvider.notifier).refresh();
+    } catch (e) {
+      AnxLog.severe('SAF import: group assignment failed: $e');
+    }
   }
 
   @override
@@ -376,6 +610,69 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
               tooltip: L10n.of(context).bookshelfFilterTagsTooltip,
               onPressed: showTagMenu,
             ),
+            IconButton(
+              icon: const Icon(EvaIcons.list_outline, size: 22),
+              tooltip: L10n.of(context).bookshelfSelectMode,
+              onPressed: () {
+                setState(() {
+                  _selectMode = !_selectMode;
+                  if (!_selectMode) _selectedBookIds.clear();
+                });
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // batch action bar shown instead of the filter bar while selecting
+    Widget buildSelectBar(List<List<Book>> books) {
+      final allBookIds = books
+          .where((group) => group.length == 1)
+          .map((group) => group.first.id)
+          .toSet();
+      final allSelected = _selectedBookIds.length >= allBookIds.length &&
+          allBookIds.length > 0 &&
+          allBookIds.every(_selectedBookIds.contains);
+      return Container(
+        height: 40,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                L10n.of(context).bookshelfSelectedCount(_selectedBookIds.length),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            IconButton(
+              icon: Icon(allSelected
+                  ? EvaIcons.minus_circle_outline
+                  : EvaIcons.checkmark_circle_2_outline),
+              tooltip: L10n.of(context).webdavSelectAll,
+              onPressed: () {
+                setState(() {
+                  if (allSelected) {
+                    _selectedBookIds.clear();
+                  } else {
+                    _selectedBookIds
+                      ..clear()
+                      ..addAll(allBookIds);
+                  }
+                });
+              },
+            ),
+            IconButton(
+              icon: const Icon(EvaIcons.trash_2_outline, size: 22),
+              tooltip: L10n.of(context).commonDelete,
+              onPressed: _selectedBookIds.isEmpty
+                  ? null
+                  : () => _deleteSelectedBooks(books),
+            ),
+            IconButton(
+              icon: const Icon(EvaIcons.close_outline, size: 22),
+              onPressed: _exitSelectMode,
+            ),
           ],
         ),
       );
@@ -434,6 +731,41 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                           final topLevelKey = ValueKey<String>(
                             book.first.id.toString(),
                           );
+                          if (book.length == 1 && _selectMode) {
+                            final selected =
+                                _selectedBookIds.contains(book.first.id);
+                            return GestureDetector(
+                              key: topLevelKey,
+                              onTap: () => _toggleSelected(book.first.id),
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: Opacity(
+                                        opacity: selected ? 1 : 0.55,
+                                        child: BookFolder(books: book),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Icon(
+                                      selected
+                                          ? EvaIcons.checkmark_circle_2
+                                          : EvaIcons.radio_button_off_outline,
+                                      size: 24,
+                                      color: selected
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
                           return book.length == 1
                               ? CustomDraggable(
                                   key: topLevelKey,
@@ -483,10 +815,15 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           error: (error, stack) => Center(child: Text(error.toString())),
         );
 
-    Widget body = Column(
-      children: [
-        buildFilterBar(),
-        Expanded(
+    Widget body = Builder(builder: (context) {
+      final books = ref.watch(bookListProvider).whenOrNull(
+                data: (books) => books,
+              ) ??
+          const <List<Book>>[];
+      return Column(
+        children: [
+          _selectMode ? buildSelectBar(books) : buildFilterBar(),
+          Expanded(
           child: DropTarget(
             onDragDone: (detail) async {
               // dropped items may include directories; expand them
@@ -538,7 +875,8 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           ),
         ),
       ],
-    );
+      );
+    });
 
     PreferredSizeWidget appBar = AppBar(
       forceMaterialTransparency: true,

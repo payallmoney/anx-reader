@@ -836,6 +836,19 @@ class Prefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Custom download directory for WebDAV file downloads; null means the
+  /// default `<documents>/downloads` location is used
+  String? get webdavDownloadPath => prefs.getString('webdavDownloadPath');
+
+  set webdavDownloadPath(String? value) {
+    if (value == null) {
+      prefs.remove('webdavDownloadPath');
+    } else {
+      prefs.setString('webdavDownloadPath', value);
+    }
+    notifyListeners();
+  }
+
   void saveAiConfig(String identifier, Map<String, String> config) {
     prefs.setString('aiConfig_$identifier', jsonEncode(config));
     notifyListeners();

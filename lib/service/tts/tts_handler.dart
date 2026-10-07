@@ -1,4 +1,5 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
@@ -79,6 +80,7 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
+    AnxLog.info('TTS play: begin');
     final session = await AudioSession.instance;
     if (await session.setActive(true)) {
       playbackState.add(playbackState.value.copyWith(
@@ -115,6 +117,7 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       updatePosition: Duration.zero,
       bufferedPosition: Duration.zero,
     ));
+    AnxLog.info('TTS play: session ready, calling engine');
     if (tts.ttsStateNotifier.value == TtsStateEnum.paused) {
       tts.updateTtsState(TtsStateEnum.playing);
       await tts.resume();
@@ -122,6 +125,7 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       tts.updateTtsState(TtsStateEnum.playing);
       await tts.speak();
     }
+    AnxLog.info('TTS play: speak returned');
   }
 
   @override

@@ -65,26 +65,39 @@ void importBookList(List<File> fileList, BuildContext context, WidgetRef ref) {
 
 /// Expands paths into book files, recursing into subdirectories so that
 /// every supported book under a dropped/picked folder is loaded.
+/// Unreadable directories are skipped instead of aborting the scan.
 Future<List<File>> collectBookFiles(List<String> paths) async {
   final result = <File>[];
   for (final rawPath in paths) {
     if (rawPath.isEmpty) continue;
     final type = FileSystemEntity.typeSync(rawPath, followLinks: true);
     if (type == FileSystemEntityType.directory) {
-      final dir = Directory(rawPath);
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
-        if (entity is! File) continue;
-        if (!allowBookExtensions
-            .contains(entity.path.split('.').last.toLowerCase())) {
-          continue;
-        }
-        result.add(entity);
-      }
+      await _collectFromDirectory(Directory(rawPath), result);
     } else if (type == FileSystemEntityType.file) {
       result.add(File(rawPath));
     }
   }
   return result;
+}
+
+Future<void> _collectFromDirectory(Directory dir, List<File> out) async {
+  List<FileSystemEntity> children;
+  try {
+    children = dir.listSync(followLinks: false);
+  } catch (e) {
+    AnxLog.warning('Import: cannot list ${dir.path}: $e');
+    return;
+  }
+  for (final entity in children) {
+    if (entity is Directory) {
+      await _collectFromDirectory(entity, out);
+    } else if (entity is File) {
+      if (allowBookExtensions
+          .contains(entity.path.split('.').last.toLowerCase())) {
+        out.add(entity);
+      }
+    }
+  }
 }
 
 void _checkDuplicatesAndShowDialog(
@@ -421,18 +434,31 @@ void _showImportDialog(
       });
 }
 
-Future<void> importBook(File file, WidgetRef ref) async {
-  String? md5 = await MD5Service.calculateFileMd5(file.path);
+Future<void> importBook(File file, WidgetRef ref,
+    {String? precomputedMd5, String? storageSubDir}) async {
+  // keep the original file name for converted/templated outputs so no
+  // numeric suffix sneaks into the stored file name
+  final preferredName = path.basenameWithoutExtension(file.path);
+  String? md5 = precomputedMd5 ?? await MD5Service.calculateFileMd5(file.path);
 
   if (file.path.split('.').last == 'txt') {
     // txt is not directly readable by the reader pipeline; the converted
     // epub lands in the app temp dir and is imported into app storage by
-    // saveBook. The original txt is never touched.
+    // saveBook. The original txt on the user's disk is never touched; the
+    // streamed copy inside app storage is just an intermediate file.
     final tempFile = await convertFromTxt(file);
+    if (path.isWithin(getBasePath('file'), file.path) ||
+        await isAppTempFile(file.path)) {
+      try {
+        file.deleteSync();
+      } catch (_) {}
+    }
     file = tempFile;
+    md5 = precomputedMd5 ?? await MD5Service.calculateFileMd5(file.path);
   }
 
-  await getBookMetadata(file, md5: md5, ref: ref);
+  await getBookMetadata(file,
+      md5: md5, ref: ref, storageSubDir: storageSubDir, preferredName: preferredName);
   ref.read(bookListProvider.notifier).refresh();
 }
 
@@ -529,6 +555,8 @@ Future<void> saveBook(
   String? md5,
   String cover, {
   Book? provideBook,
+  String? storageSubDir,
+  String? preferredName,
 }) async {
   // Extract original filename (without extension)
   final fileNameWithoutExt = path.basenameWithoutExtension(file.path);
@@ -551,11 +579,42 @@ Future<void> saveBook(
   // multi-level directory structure) and nothing is copied. Files that only
   // exist in the app's temp/cache directory (system picker copies, share
   // attachments, converted txt) have no durable original and are still
-  // imported into app storage under the legacy `file/` layout.
+  // imported into app storage under the given subdirectory layout.
+  final subDir = storageSubDir ?? 'file';
+  // prefer the original file name (folder imports) so no numeric suffix is
+  // added; fall back to title-timestamp for classic single-file imports
+  final storedName = (preferredName != null && preferredName.trim().isNotEmpty)
+      ? preferredName
+          .replaceAll(RegExp(r'[<>:"/\\|?*#%&@$^+=\[\]{}`~;!]'), '_')
+          .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+          .trim()
+      : newBookName;
   String dbFilePath;
-  if (await isAppTempFile(file.path)) {
-    dbFilePath = 'file/$newBookName.$extension';
-    await file.copy(getBasePath(dbFilePath));
+  if (path.isWithin(getBasePath(subDir), file.path)) {
+    // already streamed into the destination folder by the SAF import:
+    // keep the original file name, no re-copy
+    dbFilePath = '$subDir/${path.basename(file.path)}';
+  } else if (await isAppTempFile(file.path)) {
+    var nameToUse = storedName;
+    var reuseExisting = false;
+    final existing = File(getBasePath('$subDir/$storedName.$extension'));
+    if (await existing.exists()) {
+      final sameFile = md5 != null &&
+          await MD5Service.calculateFileMd5(existing.path) == md5;
+      if (sameFile) {
+        // re-import of the same book: reuse the stored copy
+        reuseExisting = true;
+      } else {
+        // a different book with the same file name: keep both
+        nameToUse = newBookName;
+      }
+    }
+    if (reuseExisting) {
+      dbFilePath = '$subDir/$storedName.$extension';
+    } else {
+      dbFilePath = '$subDir/$nameToUse.$extension';
+      await file.copy(getBasePath(dbFilePath));
+    }
     // remove cached file
     file.delete();
   } else {
@@ -595,6 +654,8 @@ Future<void> getBookMetadata(
   Book? book,
   String? md5,
   WidgetRef? ref,
+  String? storageSubDir,
+  String? preferredName,
 }) async {
   String serverFileName = Server().setTempFile(file);
 
@@ -638,6 +699,8 @@ Future<void> getBookMetadata(
               md5,
               cover,
               provideBook: book,
+              storageSubDir: storageSubDir,
+              preferredName: preferredName,
             );
             ref?.read(bookListProvider.notifier).refresh();
           });

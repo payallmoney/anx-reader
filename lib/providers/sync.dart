@@ -22,6 +22,7 @@ import 'package:path/path.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
+import 'package:anx_reader/utils/get_path/webdav_download_dir.dart';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/service/notes/notes_json.dart';
@@ -83,7 +84,24 @@ class Sync extends _$Sync {
     if (!await client.isExist('/anx/data/file')) {
       await client.mkdirAll('anx/data/file');
       await client.mkdirAll('anx/data/cover');
+      await client.mkdirAll('anx/data/library');
     }
+    if (!await client.isExist('/anx/data/library')) {
+      await client.mkdirAll('anx/data/library');
+    }
+  }
+
+  /// Remote storage key of a book. Storage-managed books keep their
+  /// relative path under `file/`; books imported in place are grouped
+  /// under `library/<source-dir>/<file>` so the remote keeps the same
+  /// folder organisation as the local library.
+  String bookRemoteKey(Book book) {
+    if (!book.isInPlaceImport) return book.filePath;
+    final dir = basename(dirname(book.filePath))
+        .replaceAll(RegExp(r'[<>:"/\\|?*#%&@$^+=\[\]{}`~;!]'), '_')
+        .trim();
+    final dirName = dir.isEmpty ? 'library' : dir;
+    return 'library/$dirName/${basename(book.filePath)}';
   }
 
   Future<bool> shouldSync() async {
@@ -416,6 +434,52 @@ class Sync extends _$Sync {
       }
     }
 
+    // Sync in-place imported books under library/<source-dir>/
+    final allBooks = await bookDao.selectNotDeleteBooks();
+    final inPlaceBooks = allBooks.where((b) => b.isInPlaceImport).toList();
+    if (inPlaceBooks.isNotEmpty) {
+      // group by source directory to list each remote dir once
+      final byDir = <String, List<Book>>{};
+      for (final book in inPlaceBooks) {
+        final key = bookRemoteKey(book);
+        final dir = key.substring(0, key.lastIndexOf('/'));
+        byDir.putIfAbsent(dir, () => []).add(book);
+      }
+      final wantedKeys = <String>{};
+      for (final dir in byDir.keys) {
+        final remoteInDir = await client.safeReadDir('/anx/data/$dir');
+        final remoteNames =
+            remoteInDir.map((f) => f.name ?? basename(f.path ?? '')).toSet();
+        for (final book in byDir[dir]!) {
+          final fileName = basename(book.filePath);
+          wantedKeys.add('$dir/$fileName');
+          final localExists = io.File(book.fileFullPath).existsSync();
+          if (localExists && !remoteNames.contains(fileName)) {
+            await uploadFile(book.fileFullPath, 'anx/data/$dir/$fileName');
+          }
+        }
+      }
+      // remove remote library entries the database no longer references
+      final remoteLibraryDirs =
+          await client.safeReadDir('/anx/data/library');
+      for (final remoteDir in remoteLibraryDirs) {
+        final dirName = remoteDir.name ?? '';
+        if (dirName.isEmpty) continue;
+        if (!byDir.containsKey('library/$dirName')) {
+          await client.remove('anx/data/library/$dirName');
+          continue;
+        }
+        final filesInRemoteDir =
+            await client.safeReadDir('/anx/data/library/$dirName');
+        for (final f in filesInRemoteDir) {
+          final fileName = f.name ?? '';
+          if (fileName.isNotEmpty && !wantedKeys.contains('library/$dirName/$fileName')) {
+            await client.remove('anx/data/library/$dirName/$fileName');
+          }
+        }
+      }
+    }
+
     // Remove remote files not in database
     for (var file in totalRemoteFiles) {
       if (!totalCurrentFiles.contains(file)) {
@@ -715,9 +779,24 @@ class Sync extends _$Sync {
     try {
       AnxToast.show(L10n.of(navigatorKey.currentContext!)
           .bookSyncStatusDownloadingBook(book.filePath));
-      final remotePath = 'anx/data/${book.filePath}';
-      final localPath = book.fileFullPath;
+      final remotePath = 'anx/data/${bookRemoteKey(book)}';
+      var localPath = book.fileFullPath;
+      if (book.isInPlaceImport) {
+        // in-place books restore into the configured download directory,
+        // keeping the folder structure they were uploaded under
+        final downloadDir = await getWebdavDownloadDir();
+        final sourceDir = basename(dirname(book.filePath));
+        localPath =
+            join(downloadDir.path, sourceDir, basename(book.filePath));
+        await io.Directory(dirname(localPath)).create(recursive: true);
+      }
       await downloadFile(remotePath, localPath);
+      if (book.isInPlaceImport && localPath != book.filePath) {
+        await bookDao.updateBook(book.copyWith(
+          filePath: localPath,
+          updateTime: DateTime.now(),
+        ));
+      }
     } catch (e) {
       AnxToast.show(
           L10n.of(navigatorKey.currentContext!).bookSyncStatusDownloadFailed);

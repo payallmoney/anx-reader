@@ -8,6 +8,7 @@ import 'package:anx_reader/providers/storage_info.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/utils/get_path/storage_migration.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
+import 'package:anx_reader/utils/saf_tree.dart';
 import 'package:anx_reader/widgets/common/anx_button.dart';
 import 'package:anx_reader/widgets/delete_confirm.dart';
 import 'package:anx_reader/widgets/settings/settings_section.dart';
@@ -59,6 +60,22 @@ class _StorageSettingsState extends ConsumerState<StorageSettings>
   }
 
   Future<void> _selectNewPath() async {
+    // on Android a custom folder is only writable with all-files access
+    if (AnxPlatform.isAndroid && !await SafTree.hasAllFilesAccess()) {
+      if (!mounted) return;
+      final opened = await SafTree.requestAllFilesAccess();
+      if (opened) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(L10n.of(context).storageGrantAllFilesThenRetry),
+            ),
+          );
+        }
+      }
+      return;
+    }
+
     final result = await FilePicker.platform.getDirectoryPath();
     if (result == null) return;
 
@@ -249,7 +266,7 @@ class _StorageSettingsState extends ConsumerState<StorageSettings>
       ),
 
       // Custom storage location (Windows only)
-      if (AnxPlatform.isWindows)
+      if (AnxPlatform.isWindows || AnxPlatform.isAndroid)
         SettingsSection(
           title: Text(L10n.of(context).storageCustomLocation),
           tiles: [
@@ -265,6 +282,39 @@ class _StorageSettingsState extends ConsumerState<StorageSettings>
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
+                  // grant all-files access so the default public folder
+                  // /storage/emulated/0/AnxReader can be used on Android
+                  if (AnxPlatform.isAndroid)
+                    FutureBuilder<bool>(
+                      future: SafTree.hasAllFilesAccess(),
+                      builder: (context, snapshot) {
+                        if (snapshot.data != false) {
+                          return const SizedBox.shrink();
+                        }
+                        return ListTile(
+                          leading: const Icon(Icons.folder_shared_outlined),
+                          title:
+                              Text(L10n.of(context).storageGrantAllFiles),
+                          subtitle: Text(
+                            L10n.of(context).storageGrantAllFilesHint,
+                            style:
+                                Theme.of(context).textTheme.bodySmall,
+                          ),
+                          onTap: () async {
+                            final opened =
+                                await SafTree.requestAllFilesAccess();
+                            if (opened && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(L10n.of(context)
+                                      .storageGrantAllFilesThenRetry),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
                   // Selected new path (if any)
                   if (_selectedNewPath != null) ...[
                     ListTile(
