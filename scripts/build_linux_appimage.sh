@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_NAME="Anx Reader"
-APP_ID="com.anxcye.anx_reader"
+APP_ID="payallmoney.github.com"
 BINARY_NAME="anx_reader"
 ICON_NAME="anx-reader"
 ARCH="${ARCH:-x86_64}"
