@@ -21,6 +21,7 @@ import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/utils/saf_tree.dart';
+import 'package:anx_reader/page/home_page/bookshelf_page.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/utils/get_path/macos_migration.dart';
 import 'package:anx_reader/utils/color_scheme.dart';
@@ -118,8 +119,10 @@ class _MyAppState extends ConsumerState<MyApp>
     if (AnxPlatform.isAndroid) {
       // poll so warm starts (onNewIntent with a new auto_tts_path) are
       // picked up too; consumeAutoTtsPath returns null when nothing pending
-      _autoTestTimer = Timer.periodic(
-          const Duration(seconds: 2), (_) => _maybeRunAutoTtsTest());
+      _autoTestTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        _maybeRunAutoTtsTest();
+        _maybeRunAutoImportFolder();
+      });
     }
   }
 
@@ -190,6 +193,45 @@ class _MyAppState extends ConsumerState<MyApp>
     await TtsHandler().init(player.initTts, player.ttsNext, player.ttsPrev);
     debugPrint('AUTO-TTS: starting playback');
     await audioHandler.play();
+  }
+
+  /// adb-driven folder import test: `am start ... --es auto_import_folder
+  /// <dir>` imports every book under the folder into file/<folder>/ and
+  /// groups them on the shelf, mirroring the SAF folder import flow.
+  Future<void> _maybeRunAutoImportFolder() async {
+    final path = await SafTree.consumeAutoImportFolder();
+    if (path == null || path.isEmpty) return;
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    debugPrint('AUTO-IMPORT: folder $path');
+    try {
+      final files = await collectBookFiles([path]);
+      debugPrint('AUTO-IMPORT: ${files.length} books found');
+      if (files.isEmpty) return;
+      final dirName = path
+          .split(Platform.pathSeparator)
+          .last
+          .replaceAll(RegExp(r'[<>:"/\\|?*#%&@$^+=\[\]{}`~;!]'), '_')
+          .trim();
+      final subDir = dirName.isEmpty ? 'file' : 'file/$dirName';
+      final destDir = getBasePath(subDir);
+      await Directory(destDir).create(recursive: true);
+      final md5s = <String>[];
+      for (final src in files) {
+        final base = src.path.split(Platform.pathSeparator).last;
+        final dest = '$destDir${Platform.pathSeparator}$base';
+        await src.copy(dest);
+        final md5 = await MD5Service.calculateFileMd5(dest);
+        await importBook(File(dest), ref,
+            precomputedMd5: md5, storageSubDir: subDir);
+        if (md5 != null) md5s.add(md5);
+      }
+      await groupImportedBooks(dirName, md5s, ref);
+      debugPrint('AUTO-IMPORT: done, grouped into "$dirName"');
+    } catch (e, s) {
+      debugPrint('AUTO-IMPORT: error $e / $s');
+    }
   }
 
   @override

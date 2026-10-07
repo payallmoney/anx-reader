@@ -17,10 +17,12 @@ class MainActivity : AudioServiceActivity() {
     // automation hook: `am start ... --es auto_tts_path <file>` makes the app
     // import the book and start narrating without UI interaction
     private var pendingAutoTtsPath: String? = null
+    private var pendingAutoImportFolder: String? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         pendingAutoTtsPath = intent?.getStringExtra("auto_tts_path")
+        pendingAutoImportFolder = intent?.getStringExtra("auto_import_folder")
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -28,6 +30,7 @@ class MainActivity : AudioServiceActivity() {
         // Ensure the latest intent is stored so plugins relying on Activity#getIntent can read it.
         setIntent(intent)
         intent.getStringExtra("auto_tts_path")?.let { pendingAutoTtsPath = it }
+        intent.getStringExtra("auto_import_folder")?.let { pendingAutoImportFolder = it }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -182,6 +185,11 @@ class MainActivity : AudioServiceActivity() {
                 // automation hook for adb-driven TTS tests
                 "consumeAutoTtsPath" -> {
                     result.success(pendingAutoTtsPath.also { pendingAutoTtsPath = null })
+                }
+
+                // automation hook for adb-driven folder import tests
+                "consumeAutoImportFolder" -> {
+                    result.success(pendingAutoImportFolder.also { pendingAutoImportFolder = null })
                 }
 
                 "requestAllFilesAccess" -> {

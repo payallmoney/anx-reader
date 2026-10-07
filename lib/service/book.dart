@@ -596,23 +596,21 @@ Future<void> saveBook(
     dbFilePath = '$subDir/${path.basename(file.path)}';
   } else if (await isAppTempFile(file.path)) {
     var nameToUse = storedName;
-    var reuseExisting = false;
+    var skipCopy = false;
     final existing = File(getBasePath('$subDir/$storedName.$extension'));
     if (await existing.exists()) {
+      // A file with the same name already exists in this folder import.
+      // The md5 never matches for txt books (the stored copy is the
+      // converted epub), so treat the same name as the same book and
+      // overwrite the stored copy: re-imports stay idempotent and no
+      // timestamp suffix is ever added.
       final sameFile = md5 != null &&
           await MD5Service.calculateFileMd5(existing.path) == md5;
-      if (sameFile) {
-        // re-import of the same book: reuse the stored copy
-        reuseExisting = true;
-      } else {
-        // a different book with the same file name: keep both
-        nameToUse = newBookName;
-      }
+      skipCopy = sameFile;
+      nameToUse = storedName;
     }
-    if (reuseExisting) {
-      dbFilePath = '$subDir/$storedName.$extension';
-    } else {
-      dbFilePath = '$subDir/$nameToUse.$extension';
+    dbFilePath = '$subDir/$nameToUse.$extension';
+    if (!skipCopy) {
       await file.copy(getBasePath(dbFilePath));
     }
     // remove cached file

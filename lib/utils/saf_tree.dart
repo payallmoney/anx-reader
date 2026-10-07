@@ -78,6 +78,16 @@ class SafTree {
     }
   }
 
+  /// Consume the folder path handed over via `am start --es
+  /// auto_import_folder` for adb-driven import tests; null when absent.
+  static Future<String?> consumeAutoImportFolder() async {
+    try {
+      return await _channel.invokeMethod<String>('consumeAutoImportFolder');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Open the system folder picker and return the raw SAF tree uri.
   ///
   /// file_picker's getDirectoryPath converts the uri into a plain path

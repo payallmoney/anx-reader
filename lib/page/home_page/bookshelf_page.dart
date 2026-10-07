@@ -297,56 +297,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   /// the app convention of reusing a member book's id.
   Future<void> _groupImportedBooks(
       String groupName, List<String> md5s) async {
-    if (groupName.isEmpty || md5s.isEmpty) return;
-    try {
-      final db = await DBHelper().database;
-      final bookIds = <int>[];
-      for (final md5 in md5s) {
-        // importBook returns before the webview metadata callback inserts
-        // the row, so wait briefly for the book to appear
-        for (var i = 0; i < 25; i++) {
-          final book = await bookDao.getBookByMd5(md5);
-          if (book != null && !book.isDeleted) {
-            bookIds.add(book.id);
-            break;
-          }
-          await Future.delayed(const Duration(milliseconds: 200));
-        }
-      }
-      if (bookIds.isEmpty) return;
-
-      final existing = await db.query('tb_groups',
-          where: 'name = ? AND is_deleted = 0',
-          whereArgs: [groupName],
-          limit: 1);
-      int groupId;
-      if (existing.isNotEmpty) {
-        groupId = existing.first['id'] as int;
-      } else {
-        groupId = bookIds.first;
-        final now = DateTime.now().toIso8601String();
-        await db.insert('tb_groups', {
-          'id': groupId,
-          'name': groupName,
-          'parent_id': 0,
-          'is_deleted': 0,
-          'create_time': now,
-          'update_time': now,
-        });
-      }
-      for (final id in bookIds) {
-        await db.update(
-          'tb_books',
-          {'group_id': groupId, 'update_time': DateTime.now().toIso8601String()},
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      }
-      ref.invalidate(groupDaoProvider);
-      ref.read(bookListProvider.notifier).refresh();
-    } catch (e) {
-      AnxLog.severe('SAF import: group assignment failed: $e');
-    }
+    await groupImportedBooks(groupName, md5s, ref);
   }
 
   @override
@@ -1040,5 +991,83 @@ class _StatusChip extends StatelessWidget {
         checkmarkColor: Theme.of(context).colorScheme.primary,
       ),
     );
+  }
+}
+
+
+/// Put a batch of imported books into a shelf folder named after the
+/// source folder; the folder is created when missing. Group ids follow
+/// the app convention of reusing a member book's id.
+Future<void> groupImportedBooks(
+    String groupName, List<String> md5s, WidgetRef ref) async {
+  if (groupName.isEmpty || md5s.isEmpty) return;
+  try {
+    final db = await DBHelper().database;
+    final bookIds = <int>[];
+    for (final md5 in md5s) {
+      // importBook returns before the webview metadata callback inserts
+      // the row, so wait for the book to appear; txt conversion can be
+      // slow, allow up to ~15s per book
+      for (var i = 0; i < 75; i++) {
+        final book = await bookDao.getBookByMd5(md5);
+        if (book != null && !book.isDeleted) {
+          bookIds.add(book.id);
+          break;
+        }
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    if (bookIds.isEmpty) {
+      AnxLog.warning('SAF import: no books found for grouping');
+      return;
+    }
+
+    final existing = await db.query('tb_groups',
+        where: 'name = ? AND is_deleted = 0',
+        whereArgs: [groupName],
+        limit: 1);
+    int groupId;
+    if (existing.isNotEmpty) {
+      groupId = existing.first['id'] as int;
+    } else {
+      groupId = bookIds.first;
+      final now = DateTime.now().toIso8601String();
+      // the id may already be taken by a leftover group row from an
+      // earlier import (re-imported books keep their ids); revive that
+      // row instead of failing the whole insert
+      final byId = await db.query('tb_groups',
+          where: 'id = ?', whereArgs: [groupId], limit: 1);
+      if (byId.isNotEmpty) {
+        await db.update(
+          'tb_groups',
+          {'name': groupName, 'is_deleted': 0, 'update_time': now},
+          where: 'id = ?',
+          whereArgs: [groupId],
+        );
+      } else {
+        await db.insert('tb_groups', {
+          'id': groupId,
+          'name': groupName,
+          'parent_id': 0,
+          'is_deleted': 0,
+          'create_time': now,
+          'update_time': now,
+        });
+      }
+    }
+    for (final id in bookIds) {
+      await db.update(
+        'tb_books',
+        {'group_id': groupId, 'update_time': DateTime.now().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    AnxLog.info(
+        'SAF import: grouped ${bookIds.length} books into "$groupName" (id $groupId)');
+    ref.invalidate(groupDaoProvider);
+    ref.read(bookListProvider.notifier).refresh();
+  } catch (e) {
+    AnxLog.severe('SAF import: group assignment failed: $e');
   }
 }
