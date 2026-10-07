@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:anx_reader/utils/platform_utils.dart';
@@ -12,7 +13,15 @@ import 'package:anx_reader/page/home_page.dart';
 import 'package:anx_reader/page/migration_page.dart';
 import 'package:anx_reader/service/book_player/book_player_server.dart';
 import 'package:anx_reader/service/network/http_proxy_overrides.dart';
+import 'package:anx_reader/service/tts/system_tts.dart';
+import 'package:anx_reader/service/tts/tts_service.dart' as tts_service;
 import 'package:anx_reader/service/tts/tts_handler.dart';
+import 'package:anx_reader/service/book.dart';
+import 'package:anx_reader/dao/book.dart';
+import 'package:anx_reader/models/book.dart';
+import 'package:anx_reader/service/md5_service.dart';
+import 'package:anx_reader/utils/saf_tree.dart';
+import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/utils/get_path/macos_migration.dart';
 import 'package:anx_reader/utils/color_scheme.dart';
 import 'package:anx_reader/utils/error/common.dart';
@@ -106,10 +115,86 @@ class _MyAppState extends ConsumerState<MyApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
+    if (AnxPlatform.isAndroid) {
+      // poll so warm starts (onNewIntent with a new auto_tts_path) are
+      // picked up too; consumeAutoTtsPath returns null when nothing pending
+      _autoTestTimer = Timer.periodic(
+          const Duration(seconds: 2), (_) => _maybeRunAutoTtsTest());
+    }
+  }
+
+  Timer? _autoTestTimer;
+
+  /// adb-driven narration test: `am start ... --es auto_tts_path <file>`
+  /// imports the book and starts playback without any UI interaction.
+  Future<void> _maybeRunAutoTtsTest() async {
+    await Future.delayed(const Duration(seconds: 2));
+    final path = await SafTree.consumeAutoTtsPath();
+    if (path == null || path.isEmpty) return;
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    debugPrint('AUTO-TTS: importing $path');
+    final md5 = await MD5Service.calculateFileMd5(path);
+    Book? book =
+        md5 != null ? await bookDao.getBookByMd5(md5) : null;
+    if (book == null || book.isDeleted) {
+      // importBook skips the duplicate/confirm dialogs used by the shelf UI
+      try {
+        await importBook(File(path), ref);
+      } catch (e, s) {
+        debugPrint('AUTO-TTS: import error: $e / $s');
+      }
+      for (var i = 0; i < 100; i++) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        final books = await bookDao.selectNotDeleteBooks();
+        if (books.isNotEmpty) {
+          book = books.first;
+          break;
+        }
+      }
+    }
+    if (book == null || book.isDeleted) {
+      debugPrint('AUTO-TTS: import failed');
+      return;
+    }
+    debugPrint('AUTO-TTS: opening book ${book.id}');
+    // do not await: pushToReadingPage completes only when reading ends
+    unawaited(pushToReadingPage(ref, context, book));
+    // the reading webview may take a while on first launch; retry
+    var player = epubPlayerKey.currentState;
+    for (var i = 0; i < 90 && player == null; i++) {
+      await Future.delayed(const Duration(seconds: 2));
+      player = epubPlayerKey.currentState;
+    }
+    if (player == null) {
+      debugPrint('AUTO-TTS: player not ready');
+      return;
+    }
+    // pick any available system voice so narration can start unattended
+    try {
+      final voices = await SystemTts().getVoices();
+      if (voices.isNotEmpty) {
+        // prefer an offline voice: network voices stall the engine when
+        // the emulator has no connectivity
+        final local = voices
+            .where((v) => v.shortName.contains('local'))
+            .toList();
+        final pick = local.isNotEmpty ? local.first : voices.first;
+        tts_service.SystemTtsProvider().setSelectedVoice(pick.shortName);
+        debugPrint('AUTO-TTS: voice ${pick.shortName}');
+      }
+    } catch (e) {
+      debugPrint('AUTO-TTS: voice pick failed: $e');
+    }
+    await TtsHandler().init(player.initTts, player.ttsNext, player.ttsPrev);
+    debugPrint('AUTO-TTS: starting playback');
+    await audioHandler.play();
   }
 
   @override
   void dispose() {
+    _autoTestTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

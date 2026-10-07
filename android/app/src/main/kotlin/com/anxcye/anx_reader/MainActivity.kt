@@ -2,17 +2,54 @@ package com.anxcye.anx_reader
 
 import android.content.pm.PackageManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import androidx.documentfile.provider.DocumentFile
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : AudioServiceActivity() {
+
+    private var pendingPickResult: MethodChannel.Result? = null
+
+    // automation hook: `am start ... --es auto_tts_path <file>` makes the app
+    // import the book and start narrating without UI interaction
+    private var pendingAutoTtsPath: String? = null
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        pendingAutoTtsPath = intent?.getStringExtra("auto_tts_path")
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Ensure the latest intent is stored so plugins relying on Activity#getIntent can read it.
         setIntent(intent)
+        intent.getStringExtra("auto_tts_path")?.let { pendingAutoTtsPath = it }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_PICK_DIR) {
+            val uri = data?.data
+            if (uri != null && resultCode == RESULT_OK) {
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                } catch (_: SecurityException) {
+                    // non-persistable grants still work for this session
+                }
+                pendingPickResult?.success(uri.toString())
+            } else {
+                pendingPickResult?.success(null)
+            }
+            pendingPickResult = null
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -48,9 +85,167 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // SAF tree access: Android folder pickers return content:// tree
+        // URIs that dart:io cannot read, so enumerate and copy natively.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SAF_TREE_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickDirectory" -> {
+                    // file_picker's getDirectoryPath converts the SAF tree
+                    // uri into a plain path that scoped storage forbids us
+                    // from listing, so expose the raw tree uri instead
+                    runOnUiThread {
+                        pendingPickResult = result
+                        try {
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                            intent.addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                            )
+                            startActivityForResult(intent, REQUEST_PICK_DIR)
+                        } catch (e: Exception) {
+                            pendingPickResult = null
+                            result.error("PICK_DIR_ERROR", e.message, null)
+                        }
+                    }
+                }
+
+                "listBookFiles" -> {
+                    try {
+                        val treeUri = Uri.parse(call.argument<String>("treeUri"))
+                        val root = DocumentFile.fromTreeUri(applicationContext, treeUri)
+                        if (root == null) {
+                            result.error("SAF_ERROR", "cannot open tree", null)
+                            return@setMethodCallHandler
+                        }
+                        val out = mutableListOf<Map<String, Any>>()
+                        walkTree(root, out)
+                        result.success(hashMapOf(
+                            "rootName" to (root.name ?: "imported"),
+                            "files" to out,
+                        ))
+                    } catch (e: Exception) {
+                        result.error("SAF_ERROR", e.message, null)
+                    }
+                }
+
+                // stream a SAF document straight into the app storage,
+                // computing the MD5 while copying (single pass, no temp file)
+                "copyToDir" -> {
+                    try {
+                        val uri = Uri.parse(call.argument<String>("uri"))
+                        val fileName = sanitizeFileName(
+                            call.argument<String>("fileName") ?: "book")
+                        val destDir = File(
+                            call.argument<String>("destDir") ?: cacheDir.path)
+                        if (!destDir.exists()) destDir.mkdirs()
+                        val dest = File(destDir, fileName)
+                        val digest = java.security.MessageDigest.getInstance("MD5")
+                        val input = contentResolver.openInputStream(uri)
+                        if (input == null) {
+                            result.error("SAF_COPY_ERROR", "cannot open input stream", null)
+                            return@setMethodCallHandler
+                        }
+                        input.use { src ->
+                            dest.outputStream().use { out ->
+                                val buf = ByteArray(64 * 1024)
+                                while (true) {
+                                    val n = src.read(buf)
+                                    if (n < 0) break
+                                    digest.update(buf, 0, n)
+                                    out.write(buf, 0, n)
+                                }
+                            }
+                        }
+                        val md5 = digest.digest().joinToString("") {
+                            "%02x".format(it)
+                        }
+                        result.success(hashMapOf(
+                            "path" to dest.absolutePath,
+                            "md5" to md5,
+                            "size" to dest.length(),
+                        ))
+                    } catch (e: Exception) {
+                        result.error("SAF_COPY_ERROR", e.message, null)
+                    }
+                }
+
+                // all-files access (Android 11+) lets the app store books in
+                // a user-visible folder such as /storage/emulated/0/AnxReader
+                "hasAllFilesAccess" -> {
+                    result.success(android.os.Environment.isExternalStorageManager())
+                }
+
+                // automation hook for adb-driven TTS tests
+                "consumeAutoTtsPath" -> {
+                    result.success(pendingAutoTtsPath.also { pendingAutoTtsPath = null })
+                }
+
+                "requestAllFilesAccess" -> {
+                    if (android.os.Environment.isExternalStorageManager()) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    runOnUiThread {
+                        try {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                Uri.parse("package:$packageName"),
+                            )
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            try {
+                                startActivity(android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION))
+                                result.success(true)
+                            } catch (e2: Exception) {
+                                result.error("PERM_ERROR", e2.message, null)
+                            }
+                        }
+                    }
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun sanitizeFileName(name: String): String =
+        name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+
+    private fun walkTree(dir: DocumentFile, out: MutableList<Map<String, Any>>) {
+        val children = try {
+            dir.listFiles()
+        } catch (e: Exception) {
+            emptyArray()
+        }
+        for (doc in children) {
+            if (doc.isDirectory) {
+                walkTree(doc, out)
+            } else {
+                val name = doc.name ?: continue
+                val ext = name.substringAfterLast('.', "").lowercase()
+                if (ext in bookExtensions) {
+                    out.add(
+                        hashMapOf(
+                            "uri" to doc.uri.toString(),
+                            "name" to name,
+                            "size" to doc.length(),
+                        )
+                    )
+                }
+            }
+        }
     }
 
     companion object {
         private const val INSTALL_INFO_CHANNEL = "com.anxcye.anx_reader/install_info"
+        private const val SAF_TREE_CHANNEL = "com.anxcye.anx_reader/saf_tree"
+        private const val REQUEST_PICK_DIR = 4711
+        private val bookExtensions = setOf("epub", "mobi", "azw3", "fb2", "txt", "pdf")
     }
 }
