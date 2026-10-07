@@ -16,4 +16,5 @@ key.properties
 app/.cxx/
 
 /vendor/
-/.bundle/android/build/
+/.bundle/
+/build/
