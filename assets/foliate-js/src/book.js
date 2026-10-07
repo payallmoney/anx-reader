@@ -2077,9 +2077,15 @@ window.prevSection = () => reader.view.renderer.prevSection()
 
 window.nextSection = () => reader.view.renderer.nextSection()
 
-window.initTts = () => reader.view.initTTS()
+window.initTts = () => {
+  ttsFallbackReset()
+  reader.view.initTTS()
+}
 
-window.ttsStop = () => reader.view.initTTS(true)
+window.ttsStop = () => {
+  ttsFallbackReset()
+  reader.view.initTTS(true)
+}
 
 window.ttsHere = () => {
   initTts()
@@ -2119,22 +2125,143 @@ window.ttsHighlightByCfi = cfi => {
   return reader.view.tts.highlightCfi(cfi)
 }
 
+// ---- TTS background fallback (screen off) ----
+// Loading the next section depends on WebView rendering (iframe load +
+// layout), which Android suspends while the screen is off, so the
+// render-based chapter advance never settles and narration stalls at
+// chapter boundaries. When that happens, switch to serving sentences from
+// raw section text (no rendering involved) and let the rendered view catch
+// up in the background — it completes as soon as the WebView is visible
+// again, restoring highlights and reading progress.
+const ttsFallback = { active: false, queue: [], index: null }
+
+const ttsFallbackReset = () => {
+  ttsFallback.active = false
+  ttsFallback.queue = []
+  ttsFallback.index = null
+}
+
+// split raw section text into narration-sized sentences; narration does
+// not need foliate's range-based splitting, paragraph + terminator rules
+// are enough. Plain scanning (no regex lookbehind) keeps the legacy
+// ES5 bundle working on older WebViews.
+const ttsFallbackTerminators = '。！？.!?…；;'
+const ttsFallbackQuotes = '"\'”』」'
+
+const ttsFallbackSplitSentences = text => {
+  const out = []
+  let start = 0
+  for (let i = 0; i < text.length; i++) {
+    if (!ttsFallbackTerminators.includes(text[i])) continue
+    let j = i + 1
+    while (j < text.length && ttsFallbackQuotes.includes(text[j])) j++
+    // latin '.' only ends a sentence before whitespace/end, so decimals
+    // like 3.14 stay in one piece
+    if (text[i] === '.' && j < text.length && text[j] !== ' ') continue
+    out.push(text.slice(start, j))
+    start = j
+    i = j - 1
+  }
+  if (start < text.length) out.push(text.slice(start))
+  return out.map(s => s.trim()).filter(s => s)
+}
+
+const ttsFallbackSplit = doc => {
+  const sentences = []
+  const push = text => {
+    text = (text ?? '').replace(/\s+/g, ' ').trim()
+    if (!text) return
+    for (const s of ttsFallbackSplitSentences(text)) sentences.push(s)
+  }
+  const blocks = doc?.body?.querySelectorAll(
+    'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dd, dt, caption')
+  if (blocks?.length) {
+    for (const el of blocks) push(el.textContent)
+    // pick up top-level text that is not wrapped in a block element
+    push(Array.from(doc.body.childNodes)
+      .filter(node => node.nodeType === 3)
+      .map(node => node.textContent)
+      .join(' '))
+  } else {
+    push(doc?.body?.textContent ?? '')
+  }
+  return sentences
+}
+
+const ttsFallbackLoadNext = async () => {
+  const contents = reader.view.renderer.getContents()
+  const current = ttsFallback.index ?? contents[0]?.index
+  if (current == null) {
+    ttsFallbackReset()
+    return ''
+  }
+  const sections = reader.view.book.sections
+  let next = current + 1
+  while (next < sections.length && sections[next]?.linear === 'no') next++
+  if (next >= sections.length || !sections[next]) {
+    // end of book: leave fallback mode and let ttsNext() return ''
+    ttsFallbackReset()
+    return ''
+  }
+  ttsFallback.index = next
+  try {
+    const doc = await sections[next].createDocument()
+    ttsFallback.queue = ttsFallbackSplit(doc)
+  } catch (e) {
+    console.error('tts fallback: failed to load section', next, e)
+    ttsFallback.queue = []
+  }
+  // let the rendered view catch up once rendering is possible again; the
+  // pending navigation is harmless while the screen is off
+  Promise.resolve(reader.view.renderer.goTo({ index: next })).catch(() => {})
+  if (ttsFallback.queue.length) return ttsFallback.queue.shift()
+  // empty section: keep going into the next one
+  return await ttsFallbackLoadNext()
+}
+
 window.ttsNextSection = async () => {
+  ttsFallbackReset()
   await nextSection()
   initTts()
   return ttsNext()
 }
 
 window.ttsPrevSection = async (last) => {
+  ttsFallbackReset()
   await prevSection()
   initTts()
   return last ? reader.view.tts.end() : ttsNext()
 }
 
 window.ttsNext = async () => {
+  // fallback mode: serve sentences without touching the renderer
+  if (ttsFallback.active) {
+    if (ttsFallback.queue.length) return ttsFallback.queue.shift()
+    return await ttsFallbackLoadNext()
+  }
   const result = reader.view.tts.next(true)
   if (result) return result
-  return await ttsNextSection()
+  // end of chapter: the render-based section load can hang forever while
+  // the screen is off — race it with a timeout, then fall back to raw text
+  let timedOut = false
+  try {
+    await Promise.race([
+      nextSection(),
+      new Promise(resolve => setTimeout(() => {
+        timedOut = true
+        resolve()
+      }, 5000)),
+    ])
+  } catch (e) {
+    console.error('tts: section navigation failed', e)
+  }
+  if (!timedOut) {
+    initTts()
+    return await ttsNext()
+  }
+  console.warn('tts: renderer stalled, falling back to raw section text')
+  ttsFallback.active = true
+  return await ttsFallbackLoadNext()
 }
 
 window.ttsPrev = () => {
