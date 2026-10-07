@@ -356,11 +356,25 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   void ttsStop() => webViewController.execute("ttsStop()");
 
-  Future<String> ttsNext() async => _jsString(
-        await webViewController.callAsyncJavaScript(
-          functionBody: "return await ttsNext()",
-        ),
+  Future<String> ttsNext() async {
+    final sw = Stopwatch()..start();
+    try {
+      final result = _jsString(
+        await webViewController
+            .callAsyncJavaScript(
+              functionBody: "return await ttsNext()",
+            )
+            .timeout(const Duration(seconds: 20)),
       );
+      AnxLog.info(
+          'TTS ttsNext ok in ${sw.elapsedMilliseconds}ms, ${result.length} chars');
+      return result;
+    } on TimeoutException {
+      AnxLog.severe(
+          'TTS ttsNext TIMEOUT after 20s: webview js not responding');
+      return '';
+    }
+  }
 
   Future<String> ttsPrev() async => _jsString(
         await webViewController.callAsyncJavaScript(
@@ -1016,6 +1030,9 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     transparentBackground: true,
     isInspectable: kDebugMode,
     useHybridComposition: true,
+    // native scrollbars show up as bright bars on dark reading themes
+    verticalScrollBarEnabled: false,
+    horizontalScrollBarEnabled: false,
   );
 
   bool get isDarkMode =>
@@ -1293,6 +1310,14 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
+            // paint the reading theme color behind the transparent webview
+            // so rounding gaps at the view edges don't show as bright lines
+            // on dark themes
+            ColoredBox(
+              color: Color(int.parse(
+                  '0x${backgroundColor ?? Prefs().readTheme.backgroundColor}')),
+              child: const SizedBox.expand(),
+            ),
             buildWebviewWithIOSWorkaround(context, url, initialCfi),
             readingInfoWidget(),
             if (showHistory) _buildHistoryCapsule(),

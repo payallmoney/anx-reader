@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:anx_reader/utils/platform_utils.dart';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
@@ -90,37 +91,45 @@ class SystemTts extends BaseTts {
       return;
     }
 
+    AnxLog.info('TTS init: setAwaitOptions');
     await setAwaitOptions();
-
+    AnxLog.info('TTS init: engine info');
     if (isAndroid) {
       await getDefaultEngine();
       await getDefaultVoice();
     }
+    AnxLog.info('TTS init: handlers registered');
 
     flutterTts.setStartHandler(() async {
+      AnxLog.info('TTS start handler');
       updateTtsState(TtsStateEnum.playing);
-      if (!isAndroid) {
-        return;
-      }
-      _prevVoiceText = _currentVoiceText;
-      _currentVoiceText = await epubPlayerKey.currentState!.ttsPrepare();
-
-      if (_currentVoiceText?.isNotEmpty ?? false) {
-        flutterTts.speak(_currentVoiceText!);
-      }
     });
 
+    flutterTts.setErrorHandler((msg) {
+      AnxLog.severe('TTS engine error: $msg');
+    });
+
+    // The utterance-completion event is the single driver of the Android
+    // narration chain: each finished sentence fetches the next one and
+    // speaks it. The previous design pre-queued the next sentence from the
+    // start handler via ttsPrepare(), which can hang forever after a
+    // chapter switch (WebView JS stall) and silently kill the chain.
     flutterTts.setCompletionHandler(() async {
       if (!isAndroid) {
         return;
       }
+      AnxLog.info('TTS completion handler');
       updateTtsState(TtsStateEnum.playing);
-      if (_currentVoiceText?.isEmpty ?? true) {
-        _currentVoiceText = await getNextText();
-        await speak();
-      } else {
-        await getNextText();
+      final next = await getNextText();
+      AnxLog.info('TTS next sentence: ${next.length} chars');
+      if (next.isEmpty) {
+        // end of book
+        updateTtsState(TtsStateEnum.stopped);
+        return;
       }
+      _prevVoiceText = next;
+      _currentVoiceText = next;
+      await speak(content: next);
     });
   }
 
@@ -128,9 +137,11 @@ class SystemTts extends BaseTts {
     if (isLinux) {
       return;
     }
-    await flutterTts.awaitSpeakCompletion(true);
+    // completion-driven chain: speak() must return immediately, otherwise
+    // its awaited completion races the completion handler and skips
+    // sentences
+    await flutterTts.awaitSpeakCompletion(false);
     if (isAndroid) {
-      await flutterTts.awaitSynthCompletion(true);
       await flutterTts.setQueueMode(1);
     }
   }
@@ -198,8 +209,17 @@ class SystemTts extends BaseTts {
     if (_currentVoiceText == null) {
       // getHereFunction() is initTts() — it initialises the JS TTS position
       // but returns void.  Fetch the actual first sentence via getNextTextFunction.
-      await getHereFunction();
-      _currentVoiceText = await getNextTextFunction();
+      AnxLog.info('TTS speak: initialising position');
+      // the reading view may still be rendering right after the page
+      // opens; retry until the first sentence is available
+      for (var i = 0; i < 10; i++) {
+        await getHereFunction();
+        _currentVoiceText = await getNextTextFunction();
+        if (_currentVoiceText?.isNotEmpty ?? false) break;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      AnxLog.info(
+          'TTS speak: first sentence ${_currentVoiceText?.length ?? 0} chars');
     }
 
     // Guard: if still null or empty (e.g. WebView not ready), abort.

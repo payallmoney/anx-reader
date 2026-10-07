@@ -1884,6 +1884,15 @@ const setStyle = (oldStyle) => {
   reader.view.renderer.setAttribute('bgimg-opacity', style.bgimgOpacity ?? 1)
   reader.view.renderer.setAttribute('bgimg-fit', style.bgimgFit ?? 'cover')
 
+  // keep the WebView chrome (overscroll areas, native scrollbars on some
+  // devices) the same color as the reading background so dark themes do
+  // not show bright edges
+  const bg = style.backgroundImage
+    ? `center / cover no-repeat url(${JSON.stringify(style.backgroundImage)})`
+    : style.backgroundColor
+  document.documentElement.style.background = bg
+  document.body.style.background = bg
+
   turn.animated ? reader.view.renderer.setAttribute('animated', 'true')
     : reader.view.renderer.removeAttribute('animated')
 
@@ -2192,6 +2201,7 @@ const ttsFallbackLoadNext = async () => {
   const contents = reader.view.renderer.getContents()
   const current = ttsFallback.index ?? contents[0]?.index
   if (current == null) {
+    console.warn('[TTS] fallback aborted: no current section')
     ttsFallbackReset()
     return ''
   }
@@ -2200,6 +2210,7 @@ const ttsFallbackLoadNext = async () => {
   while (next < sections.length && sections[next]?.linear === 'no') next++
   if (next >= sections.length || !sections[next]) {
     // end of book: leave fallback mode and let ttsNext() return ''
+    console.log('[TTS] fallback: end of book')
     ttsFallbackReset()
     return ''
   }
@@ -2207,8 +2218,10 @@ const ttsFallbackLoadNext = async () => {
   try {
     const doc = await sections[next].createDocument()
     ttsFallback.queue = ttsFallbackSplit(doc)
+    console.log('[TTS] fallback loaded section ' + next + ', '
+      + ttsFallback.queue.length + ' sentences')
   } catch (e) {
-    console.error('tts fallback: failed to load section', next, e)
+    console.error('[TTS] fallback: failed to load section ' + next + ': ' + e)
     ttsFallback.queue = []
   }
   // let the rendered view catch up once rendering is possible again; the
@@ -2236,17 +2249,40 @@ window.ttsPrevSection = async (last) => {
 window.ttsNext = async () => {
   // fallback mode: serve sentences without touching the renderer
   if (ttsFallback.active) {
-    if (ttsFallback.queue.length) return ttsFallback.queue.shift()
+    if (ttsFallback.queue.length) {
+      const s = ttsFallback.queue.shift()
+      console.log('[TTS] fallback sentence, ' + ttsFallback.queue.length + ' left')
+      return s
+    }
+    console.log('[TTS] fallback queue empty, loading next section')
     return await ttsFallbackLoadNext()
   }
   const result = reader.view.tts.next(true)
   if (result) return result
+  // end of book: return '' so the narration chain stops instead of
+  // looping on section navigation forever
+  const contents = reader.view.renderer.getContents()
+  console.log('[TTS] next null, contents=' + contents.length
+    + ' index=' + (contents[0]?.index ?? 'null')
+    + ' sections=' + reader.view.book.sections.length)
+  const sections = reader.view.book.sections
+  const currentIndex = contents[0]?.index
+  if (currentIndex == null) return ''
+  let next = currentIndex + 1
+  while (next < sections.length && sections[next]?.linear === 'no') next++
+  if (next >= sections.length) {
+    console.log('[TTS] end of book')
+    return ''
+  }
   // end of chapter: the render-based section load can hang forever while
   // the screen is off — race it with a timeout, then fall back to raw text
+  console.log('[TTS] chapter end, navigating (screen may be off)')
   let timedOut = false
   try {
     await Promise.race([
-      nextSection(),
+      nextSection().then(
+        () => console.log('[TTS] section navigation done'),
+        e => console.error('[TTS] section navigation error: ' + e)),
       new Promise(resolve => setTimeout(() => {
         timedOut = true
         resolve()
@@ -2259,7 +2295,7 @@ window.ttsNext = async () => {
     initTts()
     return await ttsNext()
   }
-  console.warn('tts: renderer stalled, falling back to raw section text')
+  console.warn('[TTS] renderer stalled, falling back to raw section text')
   ttsFallback.active = true
   return await ttsFallbackLoadNext()
 }

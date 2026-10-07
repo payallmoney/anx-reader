@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/models/import_file_check.dart';
@@ -7,21 +8,44 @@ import 'package:anx_reader/models/md5_statistics.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:crypto/crypto.dart';
 
+class _DigestSink implements Sink<Digest> {
+  String? value;
+
+  @override
+  void add(Digest data) => value = data.toString();
+
+  @override
+  void close() {}
+}
+
 class MD5Service {
+  /// Compute the file's MD5 on a background isolate, streaming the bytes so
+  /// large books neither block the UI nor load fully into memory.
   static Future<String?> calculateFileMd5(String filePath) async {
     try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        return null;
-      }
-
-      final bytes = await file.readAsBytes();
-      final digest = md5.convert(bytes);
-      return digest.toString();
+      return await Isolate.run(() => _md5OfFileSync(filePath));
     } catch (e) {
       AnxLog.severe('Error calculating MD5 for $filePath: $e');
       return null;
     }
+  }
+
+  static String _md5OfFileSync(String filePath) {
+    final output = _DigestSink();
+    final input = md5.startChunkedConversion(output);
+    final raf = File(filePath).openSync();
+    try {
+      final buffer = List<int>.filled(64 * 1024, 0);
+      while (true) {
+        final n = raf.readIntoSync(buffer);
+        if (n == null || n <= 0) break;
+        input.add(buffer.sublist(0, n));
+      }
+    } finally {
+      raf.closeSync();
+    }
+    input.close();
+    return output.value ?? '';
   }
 
   static Future<Book?> checkDuplicateByMd5(String md5) async {
