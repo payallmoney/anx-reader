@@ -28,6 +28,7 @@ import 'package:anx_reader/providers/bookmark.dart';
 import 'package:anx_reader/providers/chapter_content_bridge.dart';
 import 'package:anx_reader/providers/current_reading.dart';
 import 'package:anx_reader/service/book_player/book_player_server.dart';
+import 'package:anx_reader/service/tts/dart_epub_tts.dart';
 import 'package:anx_reader/providers/toc_search.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_sentence.dart';
@@ -354,26 +355,67 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     }
   }
 
-  void ttsStop() => webViewController.execute("ttsStop()");
+  void ttsStop() {
+    webViewController.execute("ttsStop()");
+    resetDartTtsFallback();
+  }
+
+  DartEpubTts? _dartTtsFallback;
+  String? _lastTtsSentence;
+
+  /// Test hook: when true the WebView call is forced to time out so the
+  /// pure-Dart fallback path can be verified on an emulator.
+  static bool debugForceTtsTimeout = false;
 
   Future<String> ttsNext() async {
+    // pure-Dart fallback active: serve without touching the WebView
+    if (_dartTtsFallback != null) {
+      final s = _dartTtsFallback!.next();
+      AnxLog.info('TTS ttsNext (dart fallback), ${s.length} chars');
+      if (s.isNotEmpty) _lastTtsSentence = s;
+      return s;
+    }
+
     final sw = Stopwatch()..start();
     try {
+      if (debugForceTtsTimeout) {
+        // test mode: pretend the WebView is frozen (screen off) so the
+        // pure-Dart fallback path can be exercised on an emulator
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        throw TimeoutException('forced for testing');
+      }
       final result = _jsString(
         await webViewController
             .callAsyncJavaScript(
               functionBody: "return await ttsNext()",
             )
-            .timeout(const Duration(seconds: 20)),
+            .timeout(const Duration(seconds: 12)),
       );
       AnxLog.info(
           'TTS ttsNext ok in ${sw.elapsedMilliseconds}ms, ${result.length} chars');
+      _lastTtsSentence = result.isNotEmpty ? result : _lastTtsSentence;
       return result;
     } on TimeoutException {
+      // Screen off: the WebView renderer is suspended and no JS runs at
+      // all, so neither the normal path nor the JS-side fallback can make
+      // progress. Continue from a pure-Dart parse of the epub file so
+      // narration survives with the WebView completely frozen.
       AnxLog.severe(
-          'TTS ttsNext TIMEOUT after 20s: webview js not responding');
-      return '';
+          'TTS ttsNext TIMEOUT after ${sw.elapsedMilliseconds}ms: webview frozen, switching to dart fallback');
+      _dartTtsFallback = await DartEpubTts.load(
+          widget.book.fileFullPath, _lastTtsSentence);
+      if (_dartTtsFallback == null) {
+        return '';
+      }
+      final s = _dartTtsFallback!.next();
+      if (s.isNotEmpty) _lastTtsSentence = s;
+      return s;
     }
+  }
+
+  void resetDartTtsFallback() {
+    _dartTtsFallback = null;
+    _lastTtsSentence = null;
   }
 
   Future<String> ttsPrev() async => _jsString(

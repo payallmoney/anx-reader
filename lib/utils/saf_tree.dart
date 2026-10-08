@@ -78,6 +78,17 @@ class SafTree {
     }
   }
 
+  /// Consume a string extra handed over via `am start --es <name>`;
+  /// empty when absent.
+  static Future<String> consumeAutoExtraString(String name) async {
+    try {
+      return await _channel.invokeMethod<String>('consumeAutoExtra', name) ??
+          '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// Consume the folder path handed over via `am start --es
   /// auto_import_folder` for adb-driven import tests; null when absent.
   static Future<String?> consumeAutoImportFolder() async {

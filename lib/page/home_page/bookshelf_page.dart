@@ -246,12 +246,9 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
     // books from the picked folder are stored under a subdirectory named
     // after the folder itself
-    final subDirName = listing.rootName
-        .replaceAll(RegExp(r'[<>:"/\\|?*#%&@$^+=\[\]{}`~;!]'), '_')
-        .trim();
-    final subDir =
-        subDirName.isEmpty ? 'file' : 'file/$subDirName';
-    final destDir = getBasePath(subDir);
+    final subDirName = sanitizeShelfDirName(listing.rootName);
+    final subDir = shelfSubDir(subDirName);
+    final destDir = destDirForShelfSubDir(subDirName);
     await Directory(destDir).create(recursive: true);
 
     var imported = 0;
@@ -1070,4 +1067,47 @@ Future<void> groupImportedBooks(
   } catch (e) {
     AnxLog.severe('SAF import: group assignment failed: $e');
   }
+}
+
+/// Storage subdirectory for books imported from a folder named
+/// [folderName]; sanitised the same way everywhere.
+String sanitizeShelfDirName(String folderName) => folderName
+    .replaceAll(RegExp(r'[<>:"/\|?*#%&@$^+=\[\]{}`~;!]'), '_')
+    .trim();
+
+String shelfSubDir(String sanitizedFolderName) =>
+    sanitizedFolderName.isEmpty ? 'file' : 'file/$sanitizedFolderName';
+
+String destDirForShelfSubDir(String sanitizedFolderName) =>
+    getBasePath(shelfSubDir(sanitizedFolderName));
+
+/// Shared core of the SAF folder import: stream every supported book from
+/// the picked tree into file/<folder>/ and group them on the shelf.
+/// Used by the shelf UI and by the adb automation hook.
+Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
+  final listing = await SafTree.listBookFiles(treeUri);
+  final subDirName = sanitizeShelfDirName(listing.rootName);
+  final subDir = shelfSubDir(subDirName);
+  final destDir = destDirForShelfSubDir(subDirName);
+  await Directory(destDir).create(recursive: true);
+
+  var imported = 0;
+  final importedMd5s = <String>[];
+  for (final entry in listing.files) {
+    try {
+      final copied = await SafTree.copyToDir(entry.uri, entry.name, destDir);
+      await importBook(
+        File(copied.path),
+        ref,
+        precomputedMd5: copied.md5,
+        storageSubDir: subDir,
+      );
+      importedMd5s.add(copied.md5);
+      imported++;
+    } catch (e) {
+      AnxLog.severe('SAF import: failed ${entry.name}: $e');
+    }
+  }
+  await groupImportedBooks(subDirName, importedMd5s, ref);
+  return imported;
 }

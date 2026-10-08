@@ -18,11 +18,15 @@ class MainActivity : AudioServiceActivity() {
     // import the book and start narrating without UI interaction
     private var pendingAutoTtsPath: String? = null
     private var pendingAutoImportFolder: String? = null
+    private val pendingAutoExtras = mutableMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         pendingAutoTtsPath = intent?.getStringExtra("auto_tts_path")
         pendingAutoImportFolder = intent?.getStringExtra("auto_import_folder")
+        for (key in listOf("auto_tts_force_timeout", "auto_import_saf")) {
+            intent?.getStringExtra(key)?.let { pendingAutoExtras[key] = it }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -31,6 +35,9 @@ class MainActivity : AudioServiceActivity() {
         setIntent(intent)
         intent.getStringExtra("auto_tts_path")?.let { pendingAutoTtsPath = it }
         intent.getStringExtra("auto_import_folder")?.let { pendingAutoImportFolder = it }
+        for (key in listOf("auto_tts_force_timeout", "auto_import_saf")) {
+            intent.getStringExtra(key)?.let { pendingAutoExtras[key] = it }
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -119,6 +126,22 @@ class MainActivity : AudioServiceActivity() {
                 "listBookFiles" -> {
                     try {
                         val treeUri = Uri.parse(call.argument<String>("treeUri"))
+                        // With all-files access, enumerate through the plain
+                        // file api: SAF uri grants are separate from
+                        // MANAGE_EXTERNAL_STORAGE and ungranted trees return
+                        // empty listings silently.
+                        if (android.os.Environment.isExternalStorageManager()) {
+                            val dir = treeUriToFile(treeUri)
+                            if (dir != null && dir.exists()) {
+                                val out = mutableListOf<Map<String, Any>>()
+                                walkFileTree(dir, dir, out)
+                                result.success(hashMapOf(
+                                    "rootName" to dir.name,
+                                    "files" to out,
+                                ))
+                                return@setMethodCallHandler
+                            }
+                        }
                         val root = DocumentFile.fromTreeUri(applicationContext, treeUri)
                         if (root == null) {
                             result.error("SAF_ERROR", "cannot open tree", null)
@@ -139,7 +162,7 @@ class MainActivity : AudioServiceActivity() {
                 // computing the MD5 while copying (single pass, no temp file)
                 "copyToDir" -> {
                     try {
-                        val uri = Uri.parse(call.argument<String>("uri"))
+                        val uriStr = call.argument<String>("uri") ?: ""
                         val fileName = sanitizeFileName(
                             call.argument<String>("fileName") ?: "book")
                         val destDir = File(
@@ -147,7 +170,12 @@ class MainActivity : AudioServiceActivity() {
                         if (!destDir.exists()) destDir.mkdirs()
                         val dest = File(destDir, fileName)
                         val digest = java.security.MessageDigest.getInstance("MD5")
-                        val input = contentResolver.openInputStream(uri)
+                        val input: java.io.InputStream? =
+                            if (!uriStr.startsWith("content:")) {
+                                File(uriStr).inputStream()
+                            } else {
+                                contentResolver.openInputStream(Uri.parse(uriStr))
+                            }
                         if (input == null) {
                             result.error("SAF_COPY_ERROR", "cannot open input stream", null)
                             return@setMethodCallHandler
@@ -187,6 +215,12 @@ class MainActivity : AudioServiceActivity() {
                     result.success(pendingAutoTtsPath.also { pendingAutoTtsPath = null })
                 }
 
+                "consumeAutoExtra" -> {
+                    val key = call.arguments as? String ?: ""
+                    val value = pendingAutoExtras.remove(key) ?: ""
+                    result.success(value)
+                }
+
                 // automation hook for adb-driven folder import tests
                 "consumeAutoImportFolder" -> {
                     result.success(pendingAutoImportFolder.also { pendingAutoImportFolder = null })
@@ -224,6 +258,46 @@ class MainActivity : AudioServiceActivity() {
 
     private fun sanitizeFileName(name: String): String =
         name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+
+    /// Resolve a SAF tree uri of the external-storage provider into a real
+    /// file path, e.g. tree/primary%3ATestBooks -> /storage/emulated/0/TestBooks
+    private fun treeUriToFile(uri: Uri): File? {
+        if (uri.scheme != "content") return null
+        val docId = try {
+            android.provider.DocumentsContract.getTreeDocumentId(uri)
+        } catch (e: Exception) {
+            return null
+        }
+        val volume = docId.substringBefore(':', "")
+        if (volume != "primary") return null
+        val sub = docId.substringAfter(':', "")
+        if (sub.isEmpty()) return null
+        return File(android.os.Environment.getExternalStorageDirectory(), sub)
+    }
+
+    /// Plain-file enumeration used when all-files access is granted; the
+    /// "uri" entries are real file paths.
+    private fun walkFileTree(root: File, dir: File, out: MutableList<Map<String, Any>>) {
+        val children = try {
+            dir.listFiles()
+        } catch (e: Exception) {
+            null
+        } ?: return
+        for (f in children) {
+            if (f.isDirectory) {
+                walkFileTree(root, f, out)
+            } else {
+                val ext = f.name.substringAfterLast('.', "").lowercase()
+                if (ext in bookExtensions) {
+                    out.add(hashMapOf(
+                        "uri" to f.absolutePath,
+                        "name" to f.name,
+                        "size" to f.length(),
+                    ))
+                }
+            }
+        }
+    }
 
     private fun walkTree(dir: DocumentFile, out: MutableList<Map<String, Any>>) {
         val children = try {

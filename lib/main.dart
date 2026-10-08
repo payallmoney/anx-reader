@@ -22,6 +22,7 @@ import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/utils/saf_tree.dart';
 import 'package:anx_reader/page/home_page/bookshelf_page.dart';
+import 'package:anx_reader/page/book_player/epub_player.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/utils/get_path/macos_migration.dart';
 import 'package:anx_reader/utils/color_scheme.dart';
@@ -122,6 +123,7 @@ class _MyAppState extends ConsumerState<MyApp>
       _autoTestTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         _maybeRunAutoTtsTest();
         _maybeRunAutoImportFolder();
+        _maybeRunAutoSafImport();
       });
     }
   }
@@ -190,9 +192,44 @@ class _MyAppState extends ConsumerState<MyApp>
     } catch (e) {
       debugPrint('AUTO-TTS: voice pick failed: $e');
     }
+    final forceTimeout =
+        await SafTree.consumeAutoExtraString('auto_tts_force_timeout');
+    if (forceTimeout == '1') {
+      EpubPlayerState.debugForceTtsTimeout = true;
+      debugPrint('AUTO-TTS: forcing webview timeouts (dart fallback test)');
+    }
     await TtsHandler().init(player.initTts, player.ttsNext, player.ttsPrev);
     debugPrint('AUTO-TTS: starting playback');
     await audioHandler.play();
+  }
+
+  /// adb-driven SAF import test: `am start ... --es auto_import_saf
+  /// <folderPath>` builds the SAF tree uri for a public-storage folder
+  /// and runs the real SAF folder-import path (DocumentFile enumeration
+  /// + streaming copy), exactly like the in-app folder picker.
+  Future<void> _maybeRunAutoSafImport() async {
+    final folder = await SafTree.consumeAutoExtraString('auto_import_saf');
+    if (folder.isEmpty) return;
+    var sub = folder;
+    const prefix = '/storage/emulated/0/';
+    if (folder.startsWith(prefix)) {
+      sub = folder.substring(prefix.length);
+    } else if (folder.startsWith('/sdcard/')) {
+      sub = folder.substring('/sdcard/'.length);
+    } else {
+      debugPrint('AUTO-SAF: folder must be under $prefix');
+      return;
+    }
+    final encoded = Uri.encodeComponent('primary:$sub');
+    final treeUri =
+        'content://com.android.externalstorage.documents/tree/$encoded';
+    debugPrint('AUTO-SAF: importing tree $treeUri');
+    try {
+      final n = await importSafTreeCore(treeUri, ref);
+      debugPrint('AUTO-SAF: imported $n books');
+    } catch (e, s) {
+      debugPrint('AUTO-SAF: error $e / $s');
+    }
   }
 
   /// adb-driven folder import test: `am start ... --es auto_import_folder
