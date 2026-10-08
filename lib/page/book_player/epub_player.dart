@@ -389,7 +389,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
             .callAsyncJavaScript(
               functionBody: "return await ttsNext()",
             )
-            .timeout(const Duration(seconds: 12)),
+            .timeout(const Duration(seconds: 3)),
       );
       AnxLog.info(
           'TTS ttsNext ok in ${sw.elapsedMilliseconds}ms, ${result.length} chars');

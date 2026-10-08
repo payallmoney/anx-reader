@@ -124,6 +124,7 @@ class _MyAppState extends ConsumerState<MyApp>
         _maybeRunAutoTtsTest();
         _maybeRunAutoImportFolder();
         _maybeRunAutoSafImport();
+        _maybeActivateForcedTtsTimeout();
       });
     }
   }
@@ -229,6 +230,18 @@ class _MyAppState extends ConsumerState<MyApp>
       debugPrint('AUTO-SAF: imported $n books');
     } catch (e, s) {
       debugPrint('AUTO-SAF: error $e / $s');
+    }
+  }
+
+  /// Runtime switch: `am start --es auto_tts_force_timeout 1` while
+  /// narration is running simulates the WebView freezing mid-book (the
+  /// real-device screen-off timing) without restarting playback.
+  Future<void> _maybeActivateForcedTtsTimeout() async {
+    if (EpubPlayerState.debugForceTtsTimeout) return;
+    final v = await SafTree.consumeAutoExtraString('auto_tts_force_timeout');
+    if (v == '1') {
+      EpubPlayerState.debugForceTtsTimeout = true;
+      debugPrint('AUTO-TTS: forcing webview timeouts NOW (mid-book freeze)');
     }
   }
 
