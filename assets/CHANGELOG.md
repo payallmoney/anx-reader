@@ -1,3 +1,26 @@
+## 1.15.18
+- Feat!: Rebranded application id to payallmoney.github.com — installs alongside the original app with its own signing key and an "oyx" wordmark on the launcher icons
+- Feat(import): Folder import with recursive subdirectory scanning; books are stored under a subdirectory named after the picked folder and grouped into a shelf folder of the same name, original file names preserved (no numeric prefixes), idempotent re-imports
+- Feat(import): On Android, folder picking bypasses SAF uri-grant pitfalls by using the all-files fast path, fixing silently empty imports
+- Feat(import): Deleting books only removes them from the library — book files are never deleted; shelf multi-select mode with batch delete
+- Feat(storage): Storage root defaults to the user-visible /storage/emulated/0/AnxReader (grantable in settings) with automatic migration from the app-private folder, custom path supported
+- Feat(webdav): Directory-based sync — in-place books upload under library/<folder>/, downloads restore into a configurable download directory, and a new WebDAV file browser lets you pick individual files to download
+- Fix(tts): Narration no longer stalls at chapter boundaries after screen-off — the chain is completion-driven with a pure-Dart epub fallback that keeps reading with the WebView completely frozen, resuming at the exact sentence (never from chapter one) via a continuously synced cursor
+- Fix(tts): The online TTS chain (Azure etc.) is fully covered by the same screen-off recovery; a 30s stall watchdog auto-resumes narration whatever the failure mode
+- Perf(import): MD5 computed on a background isolate (or during the streaming copy), no longer blocking the import progress
+- Fix(reader): Dark reading themes no longer show bright scroll-bar edges on the right/bottom — the WebView chrome follows the reading background and native scrollbars are disabled
+
+- Feat!: 应用 ID 更换为 payallmoney.github.com——与原版应用并存安装,独立签名,启动器图标带 "oyx" 小字标识
+- Feat(导入): 文件夹导入支持递归子目录;书籍存放在与所选文件夹同名的子目录并在书架自动创建同名分组,保留原文件名(无数字前缀),重复导入幂等
+- Feat(导入): Android 文件夹选择改用"所有文件访问"快速路径,绕开 SAF 授权陷阱,修复静默导入为空的问题
+- Feat(导入): 删除书籍仅移出书库,绝不删除书文件;书架支持多选批量删除
+- Feat(存储): 存储根目录默认为用户可见的 /storage/emulated/0/AnxReader(设置中授权),自动从应用私有目录迁移,支持自定义路径
+- Feat(同步): WebDAV 目录化管理——原位书籍按 library/<目录>/ 结构上传,下载恢复到可配置的下载目录,新增 WebDAV 文件浏览器可勾选单个文件下载
+- Fix(朗读): 息屏后跨章不再停住——朗读链改为完成事件驱动,WebView 完全冻结时由纯 Dart 的 epub 解析兜底续读;通过持续同步的游标从准确的句子位置续读(绝不从第一章重来)
+- Fix(朗读): 在线 TTS(Azure 等)链路同样具备息屏续读能力;30 秒停顿看门狗在任何故障模式下自动恢复朗读
+- Perf(导入): MD5 改为后台 Isolate(或在流式复制时一并计算),不再阻塞导入进度
+- Fix(阅读): 深色阅读主题下右侧/底部不再出现亮色滚动条边缘——WebView 底色跟随阅读背景并禁用原生滚动条
+
 ## 1.15.0
 - Ci(android): Play Store beta CI now completes Closed testing (alpha) and Open testing (beta) tracks so testers can download without a Console roll-out
 - Ci(android): Play Store alpha uploads to the internal track now publish as completed so testers can download without a Console roll-out
