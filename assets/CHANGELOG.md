@@ -1,3 +1,7 @@
+## 1.15.26
+- Fix(tts): Screen-off narration no longer jumps back to an earlier chapter — the fallback used a tolerant text match over the whole book, so a chapter heading could match its own duplicate in the table of contents (or any repeated phrase) and narration resumed chapters behind. Positioning now trusts the continuously-synced sentence index first, matches text only locally around the cursor, and cursor syncing never wraps back to the book start
+- Fix(书架): 息屏续读不再跳回前面的章节——兜底定位此前对全书做宽容文本匹配,章节标题会命中目录页里的同名条目(或任何重复短语),导致从几章之前的位置续读。现在优先使用持续同步的句子索引,文本匹配只在游标附近局部进行,游标同步也不再回卷到书首
+
 ## 1.15.25
 - Feat(bookshelf)!: Shelf folders are now purely virtual and freely editable — they no longer mirror the on-disk storage layout. Nested subfolders, per-folder rename, move any book into any folder (or out to the shelf), dissolve; nothing ever touches the book files
 - Feat(bookshelf): Folder dialogs gained a subfolder chip row with inline creation; edit mode adds a move-to-folder picker (shelf root / any folder indented by depth / create new subfolder); dissolving a folder handles its subfolders recursively

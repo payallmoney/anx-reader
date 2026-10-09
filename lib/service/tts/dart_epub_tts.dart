@@ -18,27 +18,58 @@ class DartEpubTts {
   final List<String> _sentences;
   int _index;
 
-  /// Parse [bookPath] (an epub zip) and position at the narration cursor:
-  /// 1. exact/fuzzy match of [lastSentence] (the last sentence the normal
-  ///    chain returned),
-  /// 2. the continuously-synced cursor (see [syncCursor]),
-  /// 3. an estimate from [progressHint] (book reading percentage),
-  /// so narration NEVER restarts from chapter one when the exact sentence
-  /// text differs between the JS splitter and this Dart splitter.
+  /// Parse [bookPath] (an epub zip) and position at the narration cursor.
+  /// Positioning order:
+  /// 1. the continuously-synced cursor (see [syncCursor]) — an exact index
+  ///    with no text ambiguity,
+  /// 2. a LOCAL text match of [lastSentence] around the cursor (the JS and
+  ///    Dart splitters can differ slightly at the same spot),
+  /// 3. a global text match — only when no cursor exists yet,
+  /// 4. an estimate from [progressHint] (book reading percentage).
+  /// A global text match is never used when a cursor exists: chapter
+  /// headers and TOC entries duplicate sentence texts early in the book,
+  /// and matching one of those restarts narration chapters behind.
   static Future<DartEpubTts?> load(String bookPath, String? lastSentence,
       {double? progressHint}) async {
     try {
       final sentences = await _ensureParsed(bookPath);
       if (sentences == null) return null;
 
+      final haveCursor = _syncedBookPath == bookPath &&
+          _syncedIndex > 0 &&
+          _syncedIndex < sentences.length;
+
       var index = -1;
       if (lastSentence != null && lastSentence.trim().isNotEmpty) {
-        index = _findSentence(sentences, lastSentence, 0);
+        final target = _normalize(lastSentence);
+        if (target.isNotEmpty) {
+          if (haveCursor) {
+            // search forward from just before the cursor (narration is
+            // monotonic); a backward scan could latch onto a duplicate
+            // header/TOC entry sitting between the match and the cursor
+            final from = _syncedIndex > 1 ? _syncedIndex - 1 : 0;
+            for (var i = from; i < sentences.length; i++) {
+              if (_sentenceMatches(sentences[i], target)) {
+                index = i + 1;
+                AnxLog.info(
+                    'DartTTS fallback: local match at $i (cursor $_syncedIndex)');
+                break;
+              }
+            }
+          } else {
+            // no cursor at all (fallback engaged before any sync): a global
+            // search is the only option
+            for (var i = 0; i < sentences.length; i++) {
+              if (_sentenceMatches(sentences[i], target)) {
+                index = i + 1;
+                AnxLog.info('DartTTS fallback: global match at $i');
+                break;
+              }
+            }
+          }
+        }
       }
-      if (index < 0 &&
-          _syncedBookPath == bookPath &&
-          _syncedIndex > 0 &&
-          _syncedIndex < sentences.length) {
+      if (index < 0 && haveCursor) {
         index = _syncedIndex;
         AnxLog.info('DartTTS fallback: using synced cursor $index');
       }
@@ -48,6 +79,7 @@ class DartEpubTts {
             'DartTTS fallback: estimated index $index from progress $progressHint');
       }
       if (index < 0) index = 0;
+      if (index > sentences.length) index = sentences.length;
 
       AnxLog.info(
           'DartTTS fallback ready: ${sentences.length} sentences, start at $index');
@@ -71,27 +103,29 @@ class DartEpubTts {
         _syncedBookPath = bookPath;
         _syncedIndex = 0;
       }
-      final found = _findSentence(sentences, sentence, _syncedIndex);
-      if (found >= 0) {
-        _syncedIndex = found + 1;
+      final target = _normalize(sentence);
+      if (target.isEmpty) return;
+      // narration is monotonic: search forward from the cursor first
+      for (var i = _syncedIndex; i < sentences.length; i++) {
+        if (_sentenceMatches(sentences[i], target)) {
+          _syncedIndex = i + 1;
+          return;
+        }
       }
+      // a small backward window covers re-speaks and splitter lag; never
+      // wrap to the book start — duplicate headers/TOC entries there would
+      // drag the cursor chapters behind
+      final from = _syncedIndex > 120 ? _syncedIndex - 120 : 0;
+      for (var i = from; i < _syncedIndex; i++) {
+        if (_sentenceMatches(sentences[i], target)) {
+          _syncedIndex = i + 1;
+          return;
+        }
+      }
+      // no text match at all (splitters diverged): assume narration still
+      // advanced one sentence so the cursor keeps roughly pace
+      if (_syncedIndex < sentences.length - 1) _syncedIndex++;
     } catch (_) {}
-  }
-
-  /// Find [sentence] in the stream, searching forward from [from] first
-  /// (the common case while syncing) then from the start (position jumps).
-  static int _findSentence(List<String> sentences, String sentence, int from) {
-    final target = _normalize(sentence);
-    if (target.isEmpty) return -1;
-    for (var i = from; i < sentences.length; i++) {
-      if (_sentenceMatches(sentences[i], target)) return i;
-    }
-    if (from > 0) {
-      for (var i = 0; i < from; i++) {
-        if (_sentenceMatches(sentences[i], target)) return i;
-      }
-    }
-    return -1;
   }
 
   /// Tolerant match: exact, containment either way, or shared 12-char
