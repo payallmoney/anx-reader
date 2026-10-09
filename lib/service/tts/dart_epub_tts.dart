@@ -88,6 +88,18 @@ class DartEpubTts {
     return s;
   }
 
+  /// Peek at upcoming sentences without advancing the cursor; used by the
+  /// online-TTS prefetcher when the WebView is frozen. Plain text only —
+  /// no cfi, so highlighting is skipped for these sentences.
+  List<Map<dynamic, dynamic>> peekList(int count, {int offset = 0}) {
+    final out = <Map<dynamic, dynamic>>[];
+    final start = _index + offset;
+    for (var i = start; i < start + count && i < _sentences.length; i++) {
+      out.add(<dynamic, dynamic>{'text': _sentences[i]});
+    }
+    return out;
+  }
+
   static void reset() {
     _cachedSentences = null;
     _cachedBookPath = null;

@@ -485,20 +485,42 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     bool includeCurrent = false,
     int offset = 1,
   }) async {
-    final result = await webViewController.callAsyncJavaScript(
-      functionBody:
-          'return ttsCollectDetails($count, ${includeCurrent ? 'true' : 'false'}, $offset)',
-    );
-    return _parseTtsSentences(result.value);
+    try {
+      final result = await webViewController
+          .callAsyncJavaScript(
+            functionBody:
+                'return ttsCollectDetails($count, ${includeCurrent ? 'true' : 'false'}, $offset)',
+          )
+          .timeout(const Duration(seconds: 3));
+      return _parseTtsSentences(result.value);
+    } catch (e) {
+      // WebView frozen (screen off): serve sentences from the pure-Dart
+      // epub parse so the online-TTS prefetcher keeps filling its buffer.
+      // Plain text only — no cfi, highlighting is skipped downstream.
+      AnxLog.severe(
+          'TTS collectDetails failed ($e), using dart fallback peek');
+      _dartTtsFallback ??= await DartEpubTts.load(
+          widget.book.fileFullPath, _lastTtsSentence);
+      if (_dartTtsFallback == null) return const [];
+      final peeked = _dartTtsFallback!.peekList(count, offset: offset - 1);
+      return peeked.map((m) => TtsSentence.fromMap(m)).toList();
+    }
   }
 
   String _jsString(EpubJavaScriptResult result) =>
       result.value?.toString() ?? '';
 
   Future<void> ttsHighlightByCfi(String cfi) async {
-    await webViewController.callAsyncJavaScript(
-      functionBody: 'return ttsHighlightByCfi(${jsonEncode(cfi)})',
-    );
+    try {
+      await webViewController
+          .callAsyncJavaScript(
+            functionBody: 'return ttsHighlightByCfi(${jsonEncode(cfi)})',
+          )
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // highlighting is best-effort; a frozen WebView must not stall the
+      // player loop
+    }
   }
 
   Future<bool> isFootNoteOpen() async =>
