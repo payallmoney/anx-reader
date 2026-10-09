@@ -91,6 +91,31 @@ class GroupDao extends _$GroupDao {
     return 0;
   }
 
+  /// Create a virtual folder with an autoincrement id under [parentId];
+  /// used for empty subfolders the user creates before moving books in.
+  Future<TbGroup?> insertNamedGroup(String name, int parentId) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    final db = await DBHelper().database;
+    final now = DateTime.now().toIso8601String();
+    final id = await db.insert('tb_groups', {
+      'name': trimmed,
+      'parent_id': parentId,
+      'is_deleted': 0,
+      'create_time': now,
+      'update_time': now,
+    });
+    ref.invalidateSelf();
+    return TbGroup(
+      id: id,
+      name: trimmed,
+      parentId: parentId,
+      isDeleted: 0,
+      createTime: now,
+      updateTime: now,
+    );
+  }
+
   Future<int> updateGroup(TbGroup group) async {
     final db = await DBHelper().database;
     final now = DateTime.now().toIso8601String();

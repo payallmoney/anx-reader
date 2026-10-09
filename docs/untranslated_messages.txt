@@ -69,7 +69,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "de": [
@@ -142,7 +148,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "es": [
@@ -215,7 +227,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "fr": [
@@ -288,7 +306,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "it": [
@@ -361,7 +385,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "ja": [
@@ -434,7 +464,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "ko": [
@@ -507,7 +543,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "pt": [
@@ -580,7 +622,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "ro": [
@@ -653,7 +701,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "ru": [
@@ -726,7 +780,13 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ],
 
   "tr": [
@@ -799,6 +859,12 @@
     "notesJsonImportInvalid",
     "settingsSyncWebdavUrlHint",
     "settingsAdvancedTrustUserCertificates",
-    "settingsAdvancedTrustUserCertificatesDesc"
+    "settingsAdvancedTrustUserCertificatesDesc",
+    "bookshelfNewFolder",
+    "bookshelfRenameFolder",
+    "bookshelfMoveToFolder",
+    "bookshelfMoveToShelf",
+    "bookshelfFolderNameHint",
+    "bookshelfNewSubFolder"
   ]
 }

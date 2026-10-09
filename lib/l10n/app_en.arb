@@ -976,4 +976,11 @@
   "settingsSyncWebdavUrlHint": "Enter a writable directory URL. The app creates an anx/ folder under it for sync data.",
   "settingsAdvancedTrustUserCertificates": "Trust user / custom CA certificates",
   "settingsAdvancedTrustUserCertificatesDesc": "Allow HTTPS with user-installed or self-signed certificates (e.g. private Nextcloud). Off by default; keep off on untrusted networks."
+,
+  "bookshelfNewFolder": "New folder",
+  "bookshelfRenameFolder": "Rename folder",
+  "bookshelfMoveToFolder": "Move to folder",
+  "bookshelfMoveToShelf": "Shelf (top level)",
+  "bookshelfFolderNameHint": "Folder name",
+  "bookshelfNewSubFolder": "New subfolder here"
 }

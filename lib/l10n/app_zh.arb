@@ -976,4 +976,11 @@
   "settingsSyncWebdavUrlHint": "请填写可写入的目录 URL。应用会在该目录下创建 anx/ 文件夹用于同步。",
   "settingsAdvancedTrustUserCertificates": "信任用户/自定义 CA 证书",
   "settingsAdvancedTrustUserCertificatesDesc": "允许使用用户安装或自签名证书的 HTTPS（如私有 Nextcloud）。默认关闭；在不可信网络请保持关闭。"
+,
+  "bookshelfNewFolder": "新建文件夹",
+  "bookshelfRenameFolder": "重命名文件夹",
+  "bookshelfMoveToFolder": "移动到文件夹",
+  "bookshelfMoveToShelf": "书架（顶层）",
+  "bookshelfFolderNameHint": "文件夹名称",
+  "bookshelfNewSubFolder": "在此新建子文件夹"
 }

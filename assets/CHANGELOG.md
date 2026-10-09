@@ -1,3 +1,14 @@
+## 1.15.25
+- Feat(bookshelf)!: Shelf folders are now purely virtual and freely editable — they no longer mirror the on-disk storage layout. Nested subfolders, per-folder rename, move any book into any folder (or out to the shelf), dissolve; nothing ever touches the book files
+- Feat(bookshelf): Folder dialogs gained a subfolder chip row with inline creation; edit mode adds a move-to-folder picker (shelf root / any folder indented by depth / create new subfolder); dissolving a folder handles its subfolders recursively
+- Fix(bookshelf): Single-member folders render as folders (they used to collapse into plain book covers); folders emptied by deletions stay visible as pass-through containers while deeper books exist
+- Fix(import): Re-importing a folder no longer pulls books out of folders you placed them in manually; the storage-layout healing from 1.15.23 became a one-time migration so it can never override manual organisation
+
+- Feat(书架)!: 书架文件夹改为纯虚拟、可自由整理——不再与磁盘存储目录绑定。支持多级子文件夹、文件夹重命名、把任意书移动到任意文件夹(或移出到书架)、解散;所有操作都不会碰书文件
+- Feat(书架): 文件夹弹窗新增子文件夹 chips 行,可直接新建;编辑模式增加"移动到文件夹"选择器(书架顶层/按层级缩进的任意文件夹/新建子文件夹);解散文件夹会递归处理子文件夹
+- Fix(书架): 只有单本书的文件夹现在显示为文件夹(之前会塌缩成普通封面);被删空的文件夹只要深层还有书就保持可见(透传容器)
+- Fix(导入): 重新导入文件夹不再把手动整理过的书拽回默认文件夹;1.15.23 的存储布局自愈改为一次性迁移,绝不会覆盖手动整理结果
+
 ## 1.15.24
 - Fix(import): Folder-import grouping is now bulletproof: it no longer aborts when the import outlives the page (large folders, app switch, activity recreation), empty folder names fall back to "imported" instead of silently skipping, and every step is written to anx_reader.log for diagnosis
 - Fix(import): The all-files fast path derives the folder name from the SAF document id like the fallback path (volume-label names no longer leak as shelf folder names)

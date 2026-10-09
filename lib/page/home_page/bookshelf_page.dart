@@ -16,7 +16,6 @@ import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
-import 'package:anx_reader/service/shelf_groups.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -254,13 +253,16 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     var imported = 0;
     var failed = 0;
     final importedMd5s = <String>[];
+    // capture translations up front: the loop below must keep running even
+    // when the page is no longer mounted (long imports)
+    final copyingMsg = L10n.of(context).importCopyingBooks;
     SmartDialog.showLoading(
-        msg: L10n.of(context).importCopyingBooks(0, listing.files.length));
+        msg: copyingMsg(0, listing.files.length));
     try {
       for (var i = 0; i < listing.files.length; i++) {
         final entry = listing.files[i];
         SmartDialog.showLoading(
-            msg: L10n.of(context).importCopyingBooks(i + 1, listing.files.length));
+            msg: copyingMsg(i + 1, listing.files.length));
         try {
           final copied =
               await SafTree.copyToDir(entry.uri, entry.name, destDir);
@@ -284,13 +286,6 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     // large folders outlive the page (activity recreation, app switch), and
     // skipping here is exactly how books end up ungrouped on the shelf
     await _groupImportedBooks(subDirName, importedMd5s);
-    // heal any stragglers the md5-based grouping missed (slow imports,
-    // records from older versions) directly from the storage layout
-    await reconcileShelfGroups(onChanged: () {
-      try {
-        ref.read(bookListProvider.notifier).refresh();
-      } catch (_) {}
-    });
     AnxLog.info(
         'SAF import: done, $imported imported, $failed failed, ${importedMd5s.length} md5s');
     if (failed > 0 && mounted) {
@@ -649,7 +644,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           data: (books) {
             for (int i = 0; i < books.length; i++) {
               // folder can't be dragged
-              if (books[i].length != 1) {
+              if (books[i].length != 1 || books[i].first.groupId != 0) {
                 lockedIndices.add(i);
               }
             }
@@ -663,7 +658,8 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                     onReorder: (ReorderedListFunction reorderedListFunction) {},
                     scrollController: _scrollController,
                     onDragStarted: (index) {
-                      if (books[index].length == 1) {
+                      if (books[index].length == 1 &&
+                          books[index].first.groupId == 0) {
                         handleBottomSheet(context, books[index].first);
                         // add other books to lockedIndices
                         for (int i = 0; i < books.length; i++) {
@@ -677,7 +673,8 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                       // remove all books from lockedIndices
                       lockedIndices = [];
                       for (int i = 0; i < books.length; i++) {
-                        if (books[i].length != 1) {
+                        if (books[i].length != 1 ||
+                            books[i].first.groupId != 0) {
                           lockedIndices.add(i);
                         }
                       }
@@ -689,6 +686,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                           final topLevelKey = ValueKey<String>(
                             book.first.id.toString(),
                           );
+                          // a shelf folder is virtual: it exists as soon as
+                          // the book belongs to a live group, even with a
+                          // single member
+                          final isLooseBook =
+                              book.length == 1 && book.first.groupId == 0;
                           if (_selectMode) {
                             final memberIds =
                                 book.map((b) => b.id).toSet();
@@ -727,7 +729,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                               ),
                             );
                           }
-                          return book.length == 1
+                          return isLooseBook
                               ? CustomDraggable(
                                   key: topLevelKey,
                                   data: book.first,
@@ -1021,6 +1023,15 @@ Future<void> groupImportedBooks(
       for (var i = 0; i < 75; i++) {
         final book = await bookDao.getBookByMd5(md5);
         if (book != null && !book.isDeleted) {
+          // folders are virtual now: never yank a book out of a folder it
+          // was deliberately placed in — only adopt ungrouped books
+          if (book.groupId != 0) {
+            final live = await db.query('tb_groups',
+                where: 'id = ? AND is_deleted = 0',
+                whereArgs: [book.groupId],
+                limit: 1);
+            if (live.isNotEmpty) break;
+          }
           bookIds.add(book.id);
           break;
         }
@@ -1028,7 +1039,9 @@ Future<void> groupImportedBooks(
       }
     }
     if (bookIds.isEmpty) {
-      AnxLog.warning('SAF import: no books found for grouping');
+      // every imported book already sits in a live folder — nothing to adopt
+      AnxLog.info(
+          'SAF import: all books already grouped, folder "$groupName" unchanged');
       return;
     }
 
@@ -1129,11 +1142,6 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
     }
   }
   await groupImportedBooks(subDirName, importedMd5s, ref);
-  await reconcileShelfGroups(onChanged: () {
-    try {
-      ref.read(bookListProvider.notifier).refresh();
-    } catch (_) {}
-  });
 
   // hide legacy records that point at files which no longer exist (the
   // timestamped copies from pre-1.15.9 imports were just cleaned up, but

@@ -4,6 +4,7 @@ import 'package:anx_reader/dao/tag.dart';
 import 'package:anx_reader/enums/sort_field.dart';
 import 'package:anx_reader/enums/sort_order.dart';
 import 'package:anx_reader/models/book.dart';
+import 'package:anx_reader/models/tb_group.dart';
 import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart'
@@ -15,21 +16,58 @@ part 'book_list.g.dart';
 
 @riverpod
 class BookList extends _$BookList {
-  List<List<Book>> groupBooks(List<Book> books) {
-    var groupedBooks = <List<Book>>[];
-    for (var book in books) {
-      if (book.groupId == 0) {
+  List<List<Book>> groupBooks(List<Book> books, List<TbGroup> groups) {
+    // shelf folders are purely virtual: books sit in a folder when their
+    // group points at a live folder row, and nesting follows parent_id.
+    // Books whose folder was deleted (or that were never grouped) show as
+    // loose books on the shelf root.
+    final liveIds = groups.map((g) => g.id).toSet();
+    final groupedBooks = <List<Book>>[];
+    for (final book in books) {
+      if (book.groupId == 0 || !liveIds.contains(book.groupId)) {
         groupedBooks.add([book]);
-      } else {
-        var existingGroup = groupedBooks.firstWhere(
-          (group) => group.first.groupId == book.groupId,
-          orElse: () => [],
-        );
-        if (existingGroup.isEmpty) {
-          groupedBooks.add([book]);
-        } else {
-          existingGroup.add(book);
+      }
+    }
+
+    // a folder is visible when it holds books itself or in any subfolder;
+    // pass-through folders (empty but with nested books) stay reachable
+    final visible = <int>{
+      for (final b in books)
+        if (b.groupId != 0 && liveIds.contains(b.groupId)) b.groupId
+    };
+    final byId = {for (final g in groups) g.id: g};
+    var propagated = true;
+    while (propagated) {
+      propagated = false;
+      for (final id in visible.toList()) {
+        final parent = byId[id]?.parentId ?? 0;
+        if (parent != 0 && !visible.contains(parent)) {
+          visible.add(parent);
+          propagated = true;
         }
+      }
+    }
+
+    List<Book> descendantBooks(int folderId) {
+      return books.where((b) {
+        var gid = b.groupId;
+        for (var i = 0; i < 10 && gid != 0; i++) {
+          if (gid == folderId) return true;
+          gid = byId[gid]?.parentId ?? 0;
+        }
+        return false;
+      }).toList();
+    }
+
+    final rootFolders = groups.where((g) => (g.parentId ?? 0) == 0).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    for (final folder in rootFolders) {
+      var members = books.where((b) => b.groupId == folder.id).toList();
+      if (members.isEmpty && visible.contains(folder.id)) {
+        members = descendantBooks(folder.id);
+      }
+      if (members.isNotEmpty) {
+        groupedBooks.add(members);
       }
     }
     return groupedBooks;
@@ -133,7 +171,9 @@ class BookList extends _$BookList {
     }
 
     final sortedBooks = sortBooks(filteredByTags);
-    return groupBooks(sortedBooks);
+    // watch the folder list so shelf folders refresh when groups change
+    final groups = ref.watch(groupDaoProvider).value ?? [];
+    return groupBooks(sortedBooks, groups);
   }
 
   @override
@@ -157,12 +197,28 @@ class BookList extends _$BookList {
     refresh();
   }
 
-  void dissolveGroup(List<Book> books) {
+  Future<void> dissolveGroup(List<Book> books) async {
+    final groupId = books.first.groupId;
+    if (groupId == 0) return;
+    final notifier = ref.read(groupDaoProvider.notifier);
+    // dissolve nested subfolders first: their books go back to the shelf
+    // root along with this folder's direct members
+    final children = await notifier.getChildGroups(groupId);
+    for (final child in children) {
+      final childBooks =
+          await bookDao.selectNotDeleteBooks().then((all) => all
+              .where((b) => b.groupId == child.id)
+              .toList());
+      for (final book in childBooks) {
+        updateBook(book.copyWith(groupId: 0));
+      }
+      await notifier.hardDeleteGroup(child.id);
+    }
     for (var book in books) {
       updateBook(book.copyWith(groupId: 0));
     }
     // delete the group
-    ref.read(groupDaoProvider.notifier).hardDeleteGroup(books.first.groupId);
+    await notifier.hardDeleteGroup(groupId);
     refresh();
   }
 

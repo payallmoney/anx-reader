@@ -1,17 +1,16 @@
 import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/utils/log/common.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Keep shelf folders in sync with the storage layout: every non-deleted
-/// book stored under `file/<name>/` belongs to a shelf folder called
-/// name. Records written by older versions (imported before folder
-/// grouping existed, or whose grouping step failed silently) are healed
-/// here without a re-import.
-///
-/// Books that were deliberately moved into another folder by the user are
-/// left alone as long as their group still exists; only ungrouped books
-/// (group_id 0) or books pointing at a missing/deleted group are adopted.
+/// One-time migration: adopt books left ungrouped by older versions into a
+/// shelf folder derived from their `file/<name>/` storage path. Runs at most
+/// once ever — afterwards shelf folders are purely virtual and freely
+/// editable, so the storage layout must never override manual organisation.
 Future<void> reconcileShelfGroups({void Function()? onChanged}) async {
   try {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('shelf_layout_reconciled') ?? false) return;
+
     final db = await DBHelper().database;
     final books = await db.query('tb_books',
         where: 'is_deleted = 0', columns: ['id', 'file_path', 'group_id']);
@@ -86,6 +85,8 @@ Future<void> reconcileShelfGroups({void Function()? onChanged}) async {
           'Shelf groups reconciled from storage layout: ${touched.join(', ')}');
       onChanged?.call();
     }
+    // never run again: folders are virtual from now on
+    await prefs.setBool('shelf_layout_reconciled', true);
   } catch (e) {
     AnxLog.severe('Shelf group reconcile failed: $e');
   }

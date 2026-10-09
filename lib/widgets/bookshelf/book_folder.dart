@@ -74,6 +74,7 @@ class _BookFolderState extends ConsumerState<BookFolder> {
         builder: (context) => BookOpenedFolder(
           books: widget.books,
           groupName: groupName,
+          groupId: widget.books.first.groupId,
         ),
       );
     }
@@ -195,7 +196,11 @@ class _BookFolderState extends ConsumerState<BookFolder> {
     );
 
     return RepaintBoundary(
-      child: widget.books.length == 1 ? singleBookTarget : groupTarget,
+      // virtual folders render the folder preview even with a single
+      // member; only loose books (no group) render as plain covers
+      child: widget.books.length == 1 && widget.books.first.groupId == 0
+          ? singleBookTarget
+          : groupTarget,
     );
   }
 }
