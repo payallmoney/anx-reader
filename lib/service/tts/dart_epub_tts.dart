@@ -18,59 +18,37 @@ class DartEpubTts {
   final List<String> _sentences;
   int _index;
 
-  /// Parse [bookPath] (an epub zip) and position after [lastSentence]
-  /// (the last sentence the normal chain returned, so narration resumes
-  /// where it stopped instead of restarting the book).
-  static Future<DartEpubTts?> load(
-      String bookPath, String? lastSentence) async {
+  /// Parse [bookPath] (an epub zip) and position at the narration cursor:
+  /// 1. exact/fuzzy match of [lastSentence] (the last sentence the normal
+  ///    chain returned),
+  /// 2. the continuously-synced cursor (see [syncCursor]),
+  /// 3. an estimate from [progressHint] (book reading percentage),
+  /// so narration NEVER restarts from chapter one when the exact sentence
+  /// text differs between the JS splitter and this Dart splitter.
+  static Future<DartEpubTts?> load(String bookPath, String? lastSentence,
+      {double? progressHint}) async {
     try {
-      List<String> sentences;
-      if (_cachedBookPath == bookPath && _cachedSentences != null) {
-        sentences = _cachedSentences!;
-      } else {
-        final bytes = await File(bookPath).readAsBytes();
-        final archive = ZipDecoder().decodeBytes(bytes);
+      final sentences = await _ensureParsed(bookPath);
+      if (sentences == null) return null;
 
-        final container = _archiveFile(archive, 'META-INF/container.xml');
-        if (container == null) return null;
-        final opfPath = _rootfilePath(utf8.decode(container));
-        if (opfPath == null) return null;
-        final opfBytes = _archiveFile(archive, opfPath);
-        if (opfBytes == null) return null;
-        final opf = utf8.decode(opfBytes);
-        final opfDir = opfPath.contains('/')
-            ? opfPath.substring(0, opfPath.lastIndexOf('/'))
-            : '';
-
-        final hrefs = _spineHrefs(opf);
-        if (hrefs.isEmpty) return null;
-
-        sentences = <String>[];
-        for (final href in hrefs) {
-          final full = opfDir.isEmpty ? href : '$opfDir/$href';
-          final data = _archiveFile(archive, full);
-          if (data == null) continue;
-          final html = utf8.decode(data, allowMalformed: true);
-          sentences.addAll(_splitChapter(html));
-        }
-        if (sentences.isEmpty) return null;
-        _cachedSentences = sentences;
-        _cachedBookPath = bookPath;
-      }
-
-      var index = 0;
+      var index = -1;
       if (lastSentence != null && lastSentence.trim().isNotEmpty) {
-        final target = _normalize(lastSentence);
-        if (target.isNotEmpty) {
-          for (var i = 0; i < sentences.length; i++) {
-            final n = _normalize(sentences[i]);
-            if (n == target || (target.length >= 6 && n.contains(target))) {
-              index = i + 1;
-              break;
-            }
-          }
-        }
+        index = _findSentence(sentences, lastSentence, 0);
       }
+      if (index < 0 &&
+          _syncedBookPath == bookPath &&
+          _syncedIndex > 0 &&
+          _syncedIndex < sentences.length) {
+        index = _syncedIndex;
+        AnxLog.info('DartTTS fallback: using synced cursor $index');
+      }
+      if (index < 0 && progressHint != null && progressHint > 0) {
+        index = (progressHint * sentences.length).floor();
+        AnxLog.info(
+            'DartTTS fallback: estimated index $index from progress $progressHint');
+      }
+      if (index < 0) index = 0;
+
       AnxLog.info(
           'DartTTS fallback ready: ${sentences.length} sentences, start at $index');
       return DartEpubTts._(sentences, index);
@@ -78,6 +56,96 @@ class DartEpubTts {
       AnxLog.severe('DartTTS fallback load failed: $e');
       return null;
     }
+  }
+
+  /// Keep a running cursor while narration flows through the normal
+  /// (WebView) path, so switching to the fallback mid-book resumes at the
+  /// right position even if sentence texts are split differently.
+  /// Lazy: the first call parses the book in the background.
+  static Future<void> syncCursor(String bookPath, String sentence) async {
+    if (sentence.trim().isEmpty) return;
+    try {
+      final sentences = await _ensureParsed(bookPath);
+      if (sentences == null) return;
+      if (_syncedBookPath != bookPath) {
+        _syncedBookPath = bookPath;
+        _syncedIndex = 0;
+      }
+      final found = _findSentence(sentences, sentence, _syncedIndex);
+      if (found >= 0) {
+        _syncedIndex = found + 1;
+      }
+    } catch (_) {}
+  }
+
+  /// Find [sentence] in the stream, searching forward from [from] first
+  /// (the common case while syncing) then from the start (position jumps).
+  static int _findSentence(List<String> sentences, String sentence, int from) {
+    final target = _normalize(sentence);
+    if (target.isEmpty) return -1;
+    for (var i = from; i < sentences.length; i++) {
+      if (_sentenceMatches(sentences[i], target)) return i;
+    }
+    if (from > 0) {
+      for (var i = 0; i < from; i++) {
+        if (_sentenceMatches(sentences[i], target)) return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Tolerant match: exact, containment either way, or shared 12-char
+  /// prefix — the JS and Dart splitters can merge/split sentences
+  /// differently at the same position in the book.
+  static bool _sentenceMatches(String candidate, String normTarget) {
+    final n = _normalize(candidate);
+    if (n == normTarget) return true;
+    if (normTarget.length >= 6 && n.length >= 6) {
+      if (n.contains(normTarget) || normTarget.contains(n)) return true;
+    }
+    final prefixLen = normTarget.length < 12 ? normTarget.length : 12;
+    if (prefixLen >= 8 && n.startsWith(normTarget.substring(0, prefixLen))) {
+      return true;
+    }
+    return false;
+  }
+
+  static int _syncedIndex = 0;
+  static String? _syncedBookPath;
+
+  static Future<List<String>?> _ensureParsed(String bookPath) async {
+    if (_cachedBookPath == bookPath && _cachedSentences != null) {
+      return _cachedSentences;
+    }
+    final bytes = await File(bookPath).readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    final container = _archiveFile(archive, 'META-INF/container.xml');
+    if (container == null) return null;
+    final opfPath = _rootfilePath(utf8.decode(container));
+    if (opfPath == null) return null;
+    final opfBytes = _archiveFile(archive, opfPath);
+    if (opfBytes == null) return null;
+    final opf = utf8.decode(opfBytes);
+    final opfDir = opfPath.contains('/')
+        ? opfPath.substring(0, opfPath.lastIndexOf('/'))
+        : '';
+
+    final hrefs = _spineHrefs(opf);
+    if (hrefs.isEmpty) return null;
+
+    final sentences = <String>[];
+    for (final href in hrefs) {
+      final full = opfDir.isEmpty ? href : '$opfDir/$href';
+      final data = _archiveFile(archive, full);
+      if (data == null) continue;
+      final html = utf8.decode(data, allowMalformed: true);
+      sentences.addAll(_splitChapter(html));
+    }
+    if (sentences.isEmpty) return null;
+    _cachedSentences = sentences;
+    _cachedBookPath = bookPath;
+    return sentences;
   }
 
   /// Next sentence, or '' at the end of the book.
@@ -103,6 +171,8 @@ class DartEpubTts {
   static void reset() {
     _cachedSentences = null;
     _cachedBookPath = null;
+    _syncedIndex = 0;
+    _syncedBookPath = null;
   }
 
   static List<String>? _cachedSentences;

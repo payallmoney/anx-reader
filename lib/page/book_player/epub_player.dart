@@ -394,6 +394,11 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       AnxLog.info(
           'TTS ttsNext ok in ${sw.elapsedMilliseconds}ms, ${result.length} chars');
       _lastTtsSentence = result.isNotEmpty ? result : _lastTtsSentence;
+      if (result.isNotEmpty) {
+        // keep the pure-Dart cursor aligned with the WebView chain so a
+        // later fallback switch resumes at the right position
+        unawaited(DartEpubTts.syncCursor(widget.book.fileFullPath, result));
+      }
       return result;
     } on TimeoutException {
       // Screen off: the WebView renderer is suspended and no JS runs at
@@ -414,7 +419,8 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   Future<String> _switchToDartFallback() async {
     _dartTtsFallback = await DartEpubTts.load(
-        widget.book.fileFullPath, _lastTtsSentence);
+        widget.book.fileFullPath, _lastTtsSentence,
+        progressHint: widget.book.readingPercentage);
     if (_dartTtsFallback == null) {
       return '';
     }
