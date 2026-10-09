@@ -1,3 +1,10 @@
+## 1.15.24
+- Fix(import): Folder-import grouping is now bulletproof: it no longer aborts when the import outlives the page (large folders, app switch, activity recreation), empty folder names fall back to "imported" instead of silently skipping, and every step is written to anx_reader.log for diagnosis
+- Fix(import): The all-files fast path derives the folder name from the SAF document id like the fallback path (volume-label names no longer leak as shelf folder names)
+
+- Fix(导入): 文件夹导入的分组逻辑全面加固:导入耗时超过页面生命周期(大文件夹、切后台、Activity 重建)不再中断分组;文件夹名为空时兜底为 "imported" 而不是静默跳过;每一步都写入 anx_reader.log 便于排查
+- Fix(导入): "所有文件访问"快速路径同样从 SAF document id 推导文件夹名,卷标名不再泄漏为书架文件夹名
+
 ## 1.15.23
 - Fix(bookshelf): Shelf multi-select actually works now — selection taps used to fall straight through the cell (hit-test transparent wrapper), and books living inside shelf folders were not selectable at all; both fixed and folder cells can be batch-deleted as a whole
 - Fix(import): Shelf folders are now reconciled from the storage layout on startup and after every folder import, so books left ungrouped by older versions (or a slow/failed grouping step) appear in their folder without a re-import; manual folder assignments are respected
