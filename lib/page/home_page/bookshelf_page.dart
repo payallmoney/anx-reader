@@ -16,6 +16,7 @@ import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
+import 'package:anx_reader/service/shelf_groups.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -60,12 +61,15 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _selectMode = false;
   final Set<int> _selectedBookIds = {};
 
-  void _enterSelectMode(int bookId) {
+  void _toggleSelected(Set<int> bookIds) {
     setState(() {
-      _selectMode = true;
-      _selectedBookIds
-        ..clear()
-        ..add(bookId);
+      final allIn =
+          bookIds.isNotEmpty && bookIds.every(_selectedBookIds.contains);
+      if (allIn) {
+        _selectedBookIds.removeAll(bookIds);
+      } else {
+        _selectedBookIds.addAll(bookIds);
+      }
     });
   }
 
@@ -73,14 +77,6 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     setState(() {
       _selectMode = false;
       _selectedBookIds.clear();
-    });
-  }
-
-  void _toggleSelected(int bookId) {
-    setState(() {
-      if (!_selectedBookIds.remove(bookId)) {
-        _selectedBookIds.add(bookId);
-      }
     });
   }
 
@@ -283,6 +279,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     if (!mounted) return;
     await _groupImportedBooks(subDirName, importedMd5s);
+    // heal any stragglers the md5-based grouping missed (slow imports,
+    // records from older versions) directly from the storage layout
+    await reconcileShelfGroups(onChanged: () {
+      ref.read(bookListProvider.notifier).refresh();
+    });
     if (failed > 0) {
       AnxToast.show(
           '${L10n.of(context).serviceImportSuccess} ($imported), failed: $failed');
@@ -576,11 +577,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     // batch action bar shown instead of the filter bar while selecting
     Widget buildSelectBar(List<List<Book>> books) {
       final allBookIds = books
-          .where((group) => group.length == 1)
-          .map((group) => group.first.id)
+          .expand((group) => group)
+          .map((book) => book.id)
           .toSet();
       final allSelected = _selectedBookIds.length >= allBookIds.length &&
-          allBookIds.length > 0 &&
+          allBookIds.isNotEmpty &&
           allBookIds.every(_selectedBookIds.contains);
       return Container(
         height: 40,
@@ -679,12 +680,15 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                           final topLevelKey = ValueKey<String>(
                             book.first.id.toString(),
                           );
-                          if (book.length == 1 && _selectMode) {
+                          if (_selectMode) {
+                            final memberIds =
+                                book.map((b) => b.id).toSet();
                             final selected =
-                                _selectedBookIds.contains(book.first.id);
+                                memberIds.every(_selectedBookIds.contains);
                             return GestureDetector(
                               key: topLevelKey,
-                              onTap: () => _toggleSelected(book.first.id),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _toggleSelected(memberIds),
                               child: Stack(
                                 children: [
                                   Positioned.fill(
@@ -1109,6 +1113,9 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
     }
   }
   await groupImportedBooks(subDirName, importedMd5s, ref);
+  await reconcileShelfGroups(onChanged: () {
+    ref.read(bookListProvider.notifier).refresh();
+  });
 
   // hide legacy records that point at files which no longer exist (the
   // timestamped copies from pre-1.15.9 imports were just cleaned up, but

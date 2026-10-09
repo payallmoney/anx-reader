@@ -1,3 +1,10 @@
+## 1.15.23
+- Fix(bookshelf): Shelf multi-select actually works now — selection taps used to fall straight through the cell (hit-test transparent wrapper), and books living inside shelf folders were not selectable at all; both fixed and folder cells can be batch-deleted as a whole
+- Fix(import): Shelf folders are now reconciled from the storage layout on startup and after every folder import, so books left ungrouped by older versions (or a slow/failed grouping step) appear in their folder without a re-import; manual folder assignments are respected
+
+- Fix(书架): 书架多选删除真正可用了——此前选择点击会直接穿透格子(命中测试透明),且文件夹内的书完全无法选中;两者已修复,文件夹格子可整体批量删除
+- Fix(导入): 启动时和每次文件夹导入后都会按存储布局对账书架分组,旧版本遗留的未分组书籍(或分组步骤失败的情况)无需重新导入即可归位;手动整理过的分组不受影响
+
 ## 1.15.18
 - Feat!: Rebranded application id to payallmoney.github.com — installs alongside the original app with its own signing key and an "oyx" wordmark on the launcher icons
 - Feat(import): Folder import with recursive subdirectory scanning; books are stored under a subdirectory named after the picked folder and grouped into a shelf folder of the same name, original file names preserved (no numeric prefixes), idempotent re-imports

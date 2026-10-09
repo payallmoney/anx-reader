@@ -17,6 +17,7 @@ import 'package:anx_reader/service/tts/system_tts.dart';
 import 'package:anx_reader/service/tts/tts_service.dart' as tts_service;
 import 'package:anx_reader/service/tts/tts_handler.dart';
 import 'package:anx_reader/service/book.dart';
+import 'package:anx_reader/service/shelf_groups.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/md5_service.dart';
@@ -30,6 +31,7 @@ import 'package:anx_reader/utils/error/common.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/window_position_validator.dart';
+import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/providers/sync.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -127,6 +129,14 @@ class _MyAppState extends ConsumerState<MyApp>
         _maybeActivateForcedTtsTimeout();
       });
     }
+    // heal shelf folders from the storage layout once after startup so
+    // records imported by older versions get grouped without a re-import
+    Future.delayed(const Duration(seconds: 6), () async {
+      if (!mounted) return;
+      await reconcileShelfGroups(onChanged: () {
+        ref.invalidate(bookListProvider);
+      });
+    });
   }
 
   Timer? _autoTestTimer;
