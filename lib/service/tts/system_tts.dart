@@ -102,11 +102,19 @@ class SystemTts extends BaseTts {
 
     flutterTts.setStartHandler(() async {
       AnxLog.info('TTS start handler');
+      _petWatchdog();
       updateTtsState(TtsStateEnum.playing);
     });
 
     flutterTts.setErrorHandler((msg) {
       AnxLog.severe('TTS engine error: $msg');
+      _petWatchdog();
+    });
+
+    // utterance progress ticks keep the watchdog fed while a long
+    // sentence is still being spoken
+    flutterTts.setProgressHandler((text, start, end, word) {
+      _petWatchdog();
     });
 
     // The utterance-completion event is the single driver of the Android
@@ -119,18 +127,78 @@ class SystemTts extends BaseTts {
         return;
       }
       AnxLog.info('TTS completion handler');
+      _petWatchdog();
       updateTtsState(TtsStateEnum.playing);
-      final next = await getNextText();
-      AnxLog.info('TTS next sentence: ${next.length} chars');
+      try {
+        final next = await getNextText();
+        AnxLog.info('TTS next sentence: ${next.length} chars');
+        if (next.isEmpty) {
+          // end of book
+          updateTtsState(TtsStateEnum.stopped);
+          _stopWatchdog();
+          return;
+        }
+        _prevVoiceText = next;
+        _currentVoiceText = next;
+        await speak(content: next);
+      } catch (e, s) {
+        // any failure in the chain (webview exceptions, engine hiccups)
+        // must not silently kill narration — log and let the watchdog
+        // recover shortly
+        AnxLog.severe('TTS completion handler error: $e\n$s');
+      }
+    });
+
+    _startWatchdog();
+  }
+
+  // ---- stall watchdog ----
+  // If playing state sees no utterance events for 30s (engine stopped
+  // calling back, chain died in an exception, device suspended us),
+  // proactively fetch the next sentence and speak it again. This is the
+  // last line of defence covering failure modes we cannot reproduce on
+  // emulators.
+  Timer? _watchdog;
+  DateTime _lastUtteranceEvent = DateTime.now();
+
+  void _petWatchdog() {
+    _lastUtteranceEvent = DateTime.now();
+  }
+
+  void _startWatchdog() {
+    if (!isAndroid) return;
+    _watchdog?.cancel();
+    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (ttsStateNotifier.value != TtsStateEnum.playing) return;
+      final idle = DateTime.now().difference(_lastUtteranceEvent).inSeconds;
+      if (idle < 30) return;
+      AnxLog.severe('TTS watchdog: stalled for ${idle}s, recovering');
+      _petWatchdog();
+      _recoverFromStall();
+    });
+    AnxLog.info('TTS watchdog started');
+  }
+
+  void _stopWatchdog() {
+    _watchdog?.cancel();
+    _watchdog = null;
+  }
+
+  Future<void> _recoverFromStall() async {
+    try {
+      final next = await getNextTextFunction();
       if (next.isEmpty) {
-        // end of book
         updateTtsState(TtsStateEnum.stopped);
+        _stopWatchdog();
         return;
       }
       _prevVoiceText = next;
       _currentVoiceText = next;
+      AnxLog.info('TTS watchdog: resuming with ${next.length} chars');
       await speak(content: next);
-    });
+    } catch (e) {
+      AnxLog.severe('TTS watchdog recovery failed: $e');
+    }
   }
 
   Future<void> setAwaitOptions() async {
@@ -246,6 +314,7 @@ class SystemTts extends BaseTts {
   @override
   Future<dynamic> stop() async {
     updateTtsState(TtsStateEnum.stopped);
+    _stopWatchdog();
     if (isLinux) {
       _currentVoiceText = null;
       return null;
@@ -272,6 +341,7 @@ class SystemTts extends BaseTts {
     if (isLinux) {
       return;
     }
+    _startWatchdog();
     if (isAndroid) {
       speak(content: _prevVoiceText);
       return;

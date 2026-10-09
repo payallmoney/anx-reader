@@ -402,15 +402,25 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       // narration survives with the WebView completely frozen.
       AnxLog.severe(
           'TTS ttsNext TIMEOUT after ${sw.elapsedMilliseconds}ms: webview frozen, switching to dart fallback');
-      _dartTtsFallback = await DartEpubTts.load(
-          widget.book.fileFullPath, _lastTtsSentence);
-      if (_dartTtsFallback == null) {
-        return '';
-      }
-      final s = _dartTtsFallback!.next();
-      if (s.isNotEmpty) _lastTtsSentence = s;
-      return s;
+      return await _switchToDartFallback();
+    } catch (e) {
+      // the WebView may also fail outright (renderer killed, channel
+      // broken) instead of timing out — same recovery applies
+      AnxLog.severe(
+          'TTS ttsNext error after ${sw.elapsedMilliseconds}ms: $e, switching to dart fallback');
+      return await _switchToDartFallback();
     }
+  }
+
+  Future<String> _switchToDartFallback() async {
+    _dartTtsFallback = await DartEpubTts.load(
+        widget.book.fileFullPath, _lastTtsSentence);
+    if (_dartTtsFallback == null) {
+      return '';
+    }
+    final s = _dartTtsFallback!.next();
+    if (s.isNotEmpty) _lastTtsSentence = s;
+    return s;
   }
 
   void resetDartTtsFallback() {
