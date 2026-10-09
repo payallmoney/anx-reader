@@ -135,8 +135,24 @@ class MainActivity : AudioServiceActivity() {
                             if (dir != null && dir.exists()) {
                                 val out = mutableListOf<Map<String, Any>>()
                                 walkFileTree(dir, dir, out)
+                                // dir.name can be a volume label on some
+                                // devices; derive the folder name from the
+                                // document id like the SAF branch below
+                                val fastDocId = try {
+                                    android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                                } catch (e: Exception) { "" }
+                                val fastDerived =
+                                    fastDocId.substringAfterLast(':').substringAfterLast('/')
+                                val fastName = when {
+                                    fastDerived.isNotBlank() &&
+                                        (dir.name.isNullOrBlank() || dir.name == "primary" ||
+                                        dir.name!!.equals("internal storage", true) ||
+                                        dir.name!!.contains("存储") || dir.name == fastDocId) ->
+                                        fastDerived
+                                    else -> dir.name ?: fastDerived.ifBlank { "imported" }
+                                }
                                 result.success(hashMapOf(
-                                    "rootName" to dir.name,
+                                    "rootName" to fastName,
                                     "files" to out,
                                 ))
                                 return@setMethodCallHandler

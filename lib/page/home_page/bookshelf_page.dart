@@ -242,10 +242,14 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
     // books from the picked folder are stored under a subdirectory named
     // after the folder itself
-    final subDirName = sanitizeShelfDirName(listing.rootName);
+    final subDirName = sanitizeShelfDirName(listing.rootName).isNotEmpty
+        ? sanitizeShelfDirName(listing.rootName)
+        : 'imported';
     final subDir = shelfSubDir(subDirName);
     final destDir = destDirForShelfSubDir(subDirName);
     await Directory(destDir).create(recursive: true);
+    AnxLog.info(
+        'SAF import: folder "${listing.rootName}" -> dir "$subDirName", ${listing.files.length} files');
 
     var imported = 0;
     var failed = 0;
@@ -254,7 +258,6 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
         msg: L10n.of(context).importCopyingBooks(0, listing.files.length));
     try {
       for (var i = 0; i < listing.files.length; i++) {
-        if (!mounted) break;
         final entry = listing.files[i];
         SmartDialog.showLoading(
             msg: L10n.of(context).importCopyingBooks(i + 1, listing.files.length));
@@ -277,14 +280,20 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     } finally {
       SmartDialog.dismiss(status: SmartStatus.loading);
     }
-    if (!mounted) return;
+    // grouping must not depend on the widget still being mounted: imports of
+    // large folders outlive the page (activity recreation, app switch), and
+    // skipping here is exactly how books end up ungrouped on the shelf
     await _groupImportedBooks(subDirName, importedMd5s);
     // heal any stragglers the md5-based grouping missed (slow imports,
     // records from older versions) directly from the storage layout
     await reconcileShelfGroups(onChanged: () {
-      ref.read(bookListProvider.notifier).refresh();
+      try {
+        ref.read(bookListProvider.notifier).refresh();
+      } catch (_) {}
     });
-    if (failed > 0) {
+    AnxLog.info(
+        'SAF import: done, $imported imported, $failed failed, ${importedMd5s.length} md5s');
+    if (failed > 0 && mounted) {
       AnxToast.show(
           '${L10n.of(context).serviceImportSuccess} ($imported), failed: $failed');
     }
@@ -1066,8 +1075,12 @@ Future<void> groupImportedBooks(
     }
     AnxLog.info(
         'SAF import: grouped ${bookIds.length} books into "$groupName" (id $groupId)');
-    ref.invalidate(groupDaoProvider);
-    ref.read(bookListProvider.notifier).refresh();
+    // the ref may already be dead when the import outlived the page; the
+    // grouping itself is done, refreshing the UI is best-effort
+    try {
+      ref.invalidate(groupDaoProvider);
+      ref.read(bookListProvider.notifier).refresh();
+    } catch (_) {}
   } catch (e) {
     AnxLog.severe('SAF import: group assignment failed: $e');
   }
@@ -1090,10 +1103,13 @@ String destDirForShelfSubDir(String sanitizedFolderName) =>
 /// Used by the shelf UI and by the adb automation hook.
 Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   final listing = await SafTree.listBookFiles(treeUri);
-  final subDirName = sanitizeShelfDirName(listing.rootName);
+  final sanitized = sanitizeShelfDirName(listing.rootName);
+  final subDirName = sanitized.isNotEmpty ? sanitized : 'imported';
   final subDir = shelfSubDir(subDirName);
   final destDir = destDirForShelfSubDir(subDirName);
   await Directory(destDir).create(recursive: true);
+  AnxLog.info(
+      'SAF import: folder "${listing.rootName}" -> dir "$subDirName", ${listing.files.length} files');
 
   var imported = 0;
   final importedMd5s = <String>[];
@@ -1114,7 +1130,9 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   }
   await groupImportedBooks(subDirName, importedMd5s, ref);
   await reconcileShelfGroups(onChanged: () {
-    ref.read(bookListProvider.notifier).refresh();
+    try {
+      ref.read(bookListProvider.notifier).refresh();
+    } catch (_) {}
   });
 
   // hide legacy records that point at files which no longer exist (the

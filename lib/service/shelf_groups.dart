@@ -27,6 +27,7 @@ Future<void> reconcileShelfGroups({void Function()? onChanged}) async {
 
     var changed = false;
     final now = DateTime.now().toIso8601String();
+    final touched = <String>[];
     for (final entry in byDir.entries) {
       final groupName = _sanitizeGroupName(entry.key);
       if (groupName.isEmpty) continue;
@@ -76,11 +77,13 @@ Future<void> reconcileShelfGroups({void Function()? onChanged}) async {
             where: 'id = ?',
             whereArgs: [book['id']]);
         changed = true;
+        touched.add('${entry.key}#${book['id']}');
       }
     }
 
     if (changed) {
-      AnxLog.info('Shelf groups reconciled from storage layout');
+      AnxLog.info(
+          'Shelf groups reconciled from storage layout: ${touched.join(', ')}');
       onChanged?.call();
     }
   } catch (e) {
