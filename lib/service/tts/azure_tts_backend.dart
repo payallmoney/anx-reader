@@ -120,11 +120,15 @@ class AzureTtsProvider extends TtsServiceProvider {
     int pitchPercent = ((pitch - 1.0) * 100).toInt();
     String pitchStr = pitchPercent >= 0 ? "+$pitchPercent%" : "$pitchPercent%";
 
+    final escaped = text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
     return '''
 <speak version='1.0' xml:lang='en-US'>
 <voice xml:lang='en-US' xml:gender='Female' name='$voice'>
 <prosody rate='$rateStr' pitch='$pitchStr'>
-$text
+$escaped
 </prosody>
 </voice>
 </speak>

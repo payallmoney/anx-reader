@@ -177,6 +177,15 @@ class _MyAppState extends ConsumerState<MyApp>
       debugPrint('AUTO-TTS: player not ready');
       return;
     }
+    // optionally force a tts service (adb test hook for the online chain)
+    final svc = await SafTree.consumeAutoExtraString('auto_tts_service');
+    if (svc.isNotEmpty && svc != Prefs().ttsService) {
+      // let switchTtsType set the pref itself, otherwise its same-service
+      // guard short-circuits and the engine is never rebuilt
+      await TtsHandler().switchTtsType(svc);
+      debugPrint('AUTO-TTS: switched service to $svc');
+    }
+
     // pick any available system voice so narration can start unattended
     try {
       final voices = await SystemTts().getVoices();

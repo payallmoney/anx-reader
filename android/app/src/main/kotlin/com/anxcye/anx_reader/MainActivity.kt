@@ -24,7 +24,7 @@ class MainActivity : AudioServiceActivity() {
         super.onCreate(savedInstanceState)
         pendingAutoTtsPath = intent?.getStringExtra("auto_tts_path")
         pendingAutoImportFolder = intent?.getStringExtra("auto_import_folder")
-        for (key in listOf("auto_tts_force_timeout", "auto_import_saf")) {
+        for (key in listOf("auto_tts_force_timeout", "auto_import_saf", "auto_tts_service")) {
             intent?.getStringExtra(key)?.let { pendingAutoExtras[key] = it }
         }
     }
@@ -35,7 +35,7 @@ class MainActivity : AudioServiceActivity() {
         setIntent(intent)
         intent.getStringExtra("auto_tts_path")?.let { pendingAutoTtsPath = it }
         intent.getStringExtra("auto_import_folder")?.let { pendingAutoImportFolder = it }
-        for (key in listOf("auto_tts_force_timeout", "auto_import_saf")) {
+        for (key in listOf("auto_tts_force_timeout", "auto_import_saf", "auto_tts_service")) {
             intent.getStringExtra(key)?.let { pendingAutoExtras[key] = it }
         }
     }

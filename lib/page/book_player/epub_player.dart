@@ -485,7 +485,21 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     bool includeCurrent = false,
     int offset = 1,
   }) async {
+    // the cursor MUST stay single-sourced: once ttsNext switched to the
+    // Dart fallback (WebView frozen), collecting through the WebView
+    // would return sentences from a stale position and dedup would stop
+    // the prefetcher from adding anything new
+    if (_dartTtsFallback != null) {
+      return _dartTtsFallback!
+          .peekList(count, offset: offset - 1)
+          .map((m) => TtsSentence.fromMap(m))
+          .toList();
+    }
     try {
+      if (debugForceTtsTimeout) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        throw TimeoutException('forced for testing');
+      }
       final result = await webViewController
           .callAsyncJavaScript(
             functionBody:
