@@ -1109,5 +1109,32 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
     }
   }
   await groupImportedBooks(subDirName, importedMd5s, ref);
+
+  // hide legacy records that point at files which no longer exist (the
+  // timestamped copies from pre-1.15.9 imports were just cleaned up, but
+  // their shelf rows keep showing timestamped titles otherwise)
+  try {
+    final db = await DBHelper().database;
+    final rows = await db.query('tb_books',
+        where: 'file_path LIKE ? AND is_deleted = 0',
+        whereArgs: ['$subDir/%']);
+    var hidden = 0;
+    for (final row in rows) {
+      final fp = row['file_path'] as String?;
+      if (fp == null) continue;
+      if (!File(getBasePath(fp)).existsSync()) {
+        await db.update('tb_books',
+            {'is_deleted': 1, 'update_time': DateTime.now().toIso8601String()},
+            where: 'id = ?', whereArgs: [row['id']]);
+        hidden++;
+      }
+    }
+    if (hidden > 0) {
+      AnxLog.info('SAF import: hid $hidden stale shelf records');
+      ref.read(bookListProvider.notifier).refresh();
+    }
+  } catch (e) {
+    AnxLog.warning('SAF import: stale record cleanup failed: $e');
+  }
   return imported;
 }

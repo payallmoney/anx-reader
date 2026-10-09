@@ -149,8 +149,23 @@ class MainActivity : AudioServiceActivity() {
                         }
                         val out = mutableListOf<Map<String, Any>>()
                         walkTree(root, out)
+                        // root.name can be a volume label ("primary",
+                        // "Internal storage", "内部存储") on some providers;
+                        // derive the folder name from the document id instead
+                        val docId = try {
+                            android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                        } catch (e: Exception) { "" }
+                        val derived = docId.substringAfterLast(':').substringAfterLast('/')
+                        val rawName = root.name
+                        val rootName = when {
+                            rawName.isNullOrBlank() || rawName == "primary" ||
+                                rawName.equals("internal storage", true) ||
+                                rawName.contains("存储") || rawName == docId ->
+                                derived.ifBlank { "imported" }
+                            else -> rawName
+                        }
                         result.success(hashMapOf(
-                            "rootName" to (root.name ?: "imported"),
+                            "rootName" to rootName,
                             "files" to out,
                         ))
                     } catch (e: Exception) {

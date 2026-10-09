@@ -628,7 +628,13 @@ Future<void> saveBook(
 
   Book book = Book(
       id: provideBook != null ? provideBook.id : -1,
-      title: provideBook?.title ?? effectiveTitle,
+      // refresh titles that were derived from old timestamped file names
+      // (pre-1.15.9 imports stored "title-1730000000000"); a 13-digit run
+      // in the title marks those records so re-imports heal them
+      title: (provideBook?.title != null &&
+              RegExp(r'\d{13}').hasMatch(provideBook!.title))
+          ? effectiveTitle
+          : provideBook?.title ?? effectiveTitle,
       coverPath: dbCoverPath,
       filePath: dbFilePath,
       lastReadPosition: provideBook?.lastReadPosition ?? '',
@@ -641,6 +647,39 @@ Future<void> saveBook(
       updateTime: DateTime.now());
 
   book.id = await bookDao.insertBook(book);
+
+  // clean up leftover timestamped copies from pre-1.15.9 imports in the
+  // same directory (e.g. "甲书-1730000000000.epub" next to "甲书.epub")
+  if (dbFilePath.contains('/')) {
+    try {
+      final dir = Directory(path.dirname(getBasePath(dbFilePath)));
+      final stalePattern = RegExp(r'^(.*)-\d{13}$');
+      String norm(String s) => s.replaceAll(RegExp(r'\s+'), '').trim();
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final base = path.basenameWithoutExtension(entity.path);
+        final m = stalePattern.firstMatch(base);
+        if (m == null) continue;
+        final legacyBase = m.group(1)!;
+        final nLegacy = norm(legacyBase);
+        final nNew = norm(storedName);
+        final nTitle = norm(effectiveTitle);
+        final similar = nLegacy.isNotEmpty &&
+            (nNew.contains(nLegacy) ||
+                nLegacy.contains(nNew) ||
+                nTitle.contains(nLegacy) ||
+                nLegacy.contains(nTitle));
+        if (similar) {
+          await entity.delete();
+          AnxLog.info(
+              'Import: removed stale copy ${path.basename(entity.path)}');
+        }
+      }
+    } catch (e) {
+      AnxLog.warning('Import: stale cleanup failed: $e');
+    }
+  }
+
   AnxToast.show(L10n.of(navigatorKey.currentContext!).serviceImportSuccess);
   await headlessInAppWebView?.dispose();
   headlessInAppWebView = null;
