@@ -1,3 +1,8 @@
+## 1.15.29
+- Fix(import): Importing a folder again always (re)creates the shelf folder and assigns the imported books into it — books already sitting in another live folder were mistaken for manually organised and skipped, so re-imports stopped creating the folder; this also self-heals shelves where older buggy imports left books in junk-named folders
+
+- Fix(导入): 重新导入文件夹总会(重新)创建书架文件夹并把导入的书放进去——之前已在其他活文件夹里的书被误判为"手动整理过"而跳过,导致导入不再建目录;对旧版本错误导入留下的垃圾名文件夹也能通过重新导入自愈
+
 ## 1.15.28
 - Fix(import): Imported folders are named after the picked folder again — v1.15.24 preferred deriving the name from the SAF document id, which some third-party file providers turn into junk like "root"; the folder's display name is now authoritative and the id is only a fallback for storage volume labels
 

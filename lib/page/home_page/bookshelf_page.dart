@@ -1027,15 +1027,10 @@ Future<void> groupImportedBooks(
       for (var i = 0; i < 75; i++) {
         final book = await bookDao.getBookByMd5(md5);
         if (book != null && !book.isDeleted) {
-          // folders are virtual now: never yank a book out of a folder it
-          // was deliberately placed in — only adopt ungrouped books
-          if (book.groupId != 0) {
-            final live = await db.query('tb_groups',
-                where: 'id = ? AND is_deleted = 0',
-                whereArgs: [book.groupId],
-                limit: 1);
-            if (live.isNotEmpty) break;
-          }
+          // an explicit folder import is an assignment request: the imported
+          // books go into the folder named after the picked folder, even if
+          // a previous import put them somewhere else (that also self-heals
+          // shelves where older buggy imports left books in junk folders)
           bookIds.add(book.id);
           break;
         }
