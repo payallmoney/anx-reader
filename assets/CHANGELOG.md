@@ -1,3 +1,8 @@
+## 1.15.54
+- Perf(import): Covers are now written to disk inside the extraction isolate — previously every book shipped a multi-megabyte base64 data URI across isolate boundaries and decoded it on the main thread; the isolate writes the cover file directly and only a KB-sized path crosses over, removing the last big per-book main-thread cost during imports
+
+- Perf(导入): 封面改为在提取 isolate 内直接写盘——此前每本书都要跨 isolate 传输数 MB 的 base64 数据并在主线程解码,这是导入期间最后一笔大的逐本主线程开销;现在跨线程只传 KB 级路径
+
 ## 1.15.53
 - Feat(import): The progress pill is visible on the reader page again — imports visibly continue while you read
 - Perf(import): More CPU left for the UI — cover base64 decoding moved off the main thread (multi-MB strings decoded in an isolate), and the pause between books doubled to 40ms; the ANR "no response" popups during large imports came from per-book work hogging the main thread and are addressed by these two

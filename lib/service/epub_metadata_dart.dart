@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:path/path.dart' as p;
 
 /// Pure-Dart epub metadata extraction, designed to run inside an isolate
 /// (`Isolate.run`): the zip parse, OPF read and cover base64 encoding all
@@ -10,7 +11,8 @@ import 'package:archive/archive.dart';
 ///
 /// Returns a map shaped like the webview onMetadata payload, or null when
 /// the file cannot be parsed (caller falls back to the webview path).
-Map<String, String?>? extractEpubMetadataDart(String path) {
+Map<String, String?>? extractEpubMetadataDart((String, String) args) {
+  final (path, coverDir) = args;
   try {
     final bytes = File(path).readAsBytesSync();
     final archive = ZipDecoder().decodeBytes(bytes);
@@ -89,8 +91,14 @@ Map<String, String?>? extractEpubMetadataDart(String path) {
       final full = opfDir(opfPath, href);
       final cf = fileByPath(full);
       if (cf != null && mediaType.startsWith('image/')) {
-        final b64 = base64Encode(cf.content as List<int>);
-        cover = 'data:$mediaType;base64,$b64';
+        final ext = mediaType.split('/').last.split(';').first;
+        // write the cover straight from the zip entry here in the isolate:
+        // returning multi-MB data URIs to the main isolate copies them and
+        // forces a decode there (visible UI stutter during imports)
+        final fileName = 'iso_${DateTime.now().microsecondsSinceEpoch}.$ext';
+        File(p.join(coverDir, fileName))
+            .writeAsBytesSync(cf.content as List<int>);
+        cover = 'cover/$fileName';
       }
     }
 

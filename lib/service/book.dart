@@ -576,6 +576,7 @@ Future<void> saveBook(
   String? storageSubDir,
   String? preferredName,
   int? groupId,
+  String? coverLocalPath,
 }) async {
   // Extract original filename (without extension)
   final fileNameWithoutExt = path.basenameWithoutExtension(file.path);
@@ -640,7 +641,10 @@ Future<void> saveBook(
   String? dbCoverPath = 'cover/$newBookName';
   // final coverPath = getBasePath(dbCoverPath);
 
-  dbCoverPath = await saveImageToLocal(cover, dbCoverPath);
+  // the isolate already wrote the cover into cover/ — just reference it
+  dbCoverPath = (coverLocalPath != null && coverLocalPath.isNotEmpty)
+      ? coverLocalPath
+      : await saveImageToLocal(cover, dbCoverPath);
   if (md5 != null) {
     provideBook ??= await bookDao.getBookByMd5(md5);
   }
@@ -760,8 +764,11 @@ Future<void> _getBookMetadataLocked(
       final p = file.path;
       // compute() passes a top-level function reference + message across
       // isolates (an Isolate.run closure here captured the enclosing widget
-      // state and failed as unsendable)
-      final meta = await compute(extractEpubMetadataDart, p);
+      // state and failed as unsendable). The cover is written to disk
+      // inside the isolate, so only KB-sized strings cross back — sending
+      // multi-MB data URIs stuttered the UI on every book.
+      final meta =
+          await compute(extractEpubMetadataDart, (p, getBasePath('cover')));
       if (meta != null) {
         final title = meta['title'] ?? 'Unknown';
         final author = meta['author'] ?? 'Unknown';
@@ -776,6 +783,7 @@ Future<void> _getBookMetadataLocked(
           storageSubDir: storageSubDir,
           preferredName: preferredName,
           groupId: groupId,
+          coverLocalPath: meta['cover'] ?? '',
         );
         // shelf refresh is controlled by importBook (folder imports batch
         // it to the end)
