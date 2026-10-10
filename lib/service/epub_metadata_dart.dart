@@ -11,8 +11,8 @@ import 'package:path/path.dart' as p;
 ///
 /// Returns a map shaped like the webview onMetadata payload, or null when
 /// the file cannot be parsed (caller falls back to the webview path).
-Map<String, String?>? extractEpubMetadataDart((String, String) args) {
-  final (path, coverDir) = args;
+Map<String, String?>? extractEpubMetadataDart((String, String, bool) args) {
+  final (path, coverDir, skipCover) = args;
   try {
     final bytes = File(path).readAsBytesSync();
     final archive = ZipDecoder().decodeBytes(bytes);
@@ -84,8 +84,10 @@ Map<String, String?>? extractEpubMetadataDart((String, String) args) {
       }
     }
 
+    // the cover is the single most expensive item (image entry extraction
+    // + file write) — reading-mode imports skip it and backfill later
     String cover = '';
-    final href = coverRef;
+    final href = skipCover ? null : coverRef;
     if (href != null && items.containsKey(href)) {
       final mediaType = items[href]![1];
       final full = opfDir(opfPath, href);

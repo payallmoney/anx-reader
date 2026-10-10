@@ -768,7 +768,15 @@ Future<void> _getBookMetadataLocked(
       // inside the isolate, so only KB-sized strings cross back — sending
       // multi-MB data URIs stuttered the UI on every book.
       final meta =
-          await compute(extractEpubMetadataDart, (p, getBasePath('cover')));
+          // reading mode: skip the cover (the most expensive item) — it
+          // is backfilled once the import finishes
+          await compute(
+              extractEpubMetadataDart,
+              (
+                p,
+                getBasePath('cover'),
+                ImportReadingGate.reading,
+              ));
       if (meta != null) {
         final title = meta['title'] ?? 'Unknown';
         final author = meta['author'] ?? 'Unknown';

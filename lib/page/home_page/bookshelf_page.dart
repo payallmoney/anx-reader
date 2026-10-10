@@ -16,6 +16,8 @@ import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
+import 'package:flutter/foundation.dart';
+import 'package:anx_reader/service/epub_metadata_dart.dart';
 import 'package:anx_reader/service/import_progress.dart';
 import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/service/import_reading_gate.dart';
@@ -1063,6 +1065,9 @@ Future<void> resumeImportTask({
   // true position ("Importing books 45/60") instead of restarting at 1
   var failed = task.failedNames.length;
   final importedMd5s = <String>[];
+  // books whose cover was skipped while reading (low-power mode) —
+  // backfilled after the loop
+  final coverBacklog = <(String, String)>[];
   final progress = ImportProgressService.instance;
   progress.start(task.subDirName, task.fileNames.length);
   progress.update(phase: ImportPhase.importing, copied: processed);
@@ -1102,7 +1107,10 @@ Future<void> resumeImportTask({
           groupId: groupId,
           refreshShelf: false,
         );
-        if (md5 != null) importedMd5s.add(md5);
+        if (md5 != null) {
+          importedMd5s.add(md5);
+          if (ImportReadingGate.reading) coverBacklog.add((stagedPath, md5));
+        }
         processed++;
         task.doneNames.add(entry.name);
         progress.update(imported: processed, failed: failed);
@@ -1121,8 +1129,10 @@ Future<void> resumeImportTask({
           await PendingImport.save(task);
         }
         // yield the main thread between books: with hundreds of books the
-        // import loop would otherwise saturate the UI (animations freeze)
-        await Future<void>.delayed(const Duration(milliseconds: 40));
+        // import loop would otherwise saturate the UI. While reading, drop
+        // to a low duty cycle (~20% CPU) so page turns stay smooth
+        await Future<void>.delayed(
+            Duration(milliseconds: ImportReadingGate.reading ? 150 : 40));
       } catch (e) {
         failed++;
         task.failedNames.add(entry.name);
@@ -1133,6 +1143,29 @@ Future<void> resumeImportTask({
     await PendingImport.save(task);
   } finally {
     SmartDialog.dismiss(status: SmartStatus.loading);
+  }
+  // backfill covers skipped during reading, now at full speed
+  if (coverBacklog.isNotEmpty) {
+    AnxLog.info('Import: backfilling ${coverBacklog.length} skipped covers');
+    for (final (stagedPath, md5) in coverBacklog) {
+      try {
+        final meta = await compute(
+            extractEpubMetadataDart, (stagedPath, getBasePath('cover'), false));
+        final cover = meta?['cover'];
+        if (cover != null && cover.isNotEmpty) {
+          final b = await bookDao.getBookByMd5(md5);
+          if (b != null && !b.isDeleted) {
+            await bookDao.updateBook(b.copyWith(coverPath: cover));
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      } catch (e) {
+        AnxLog.warning('Import: cover backfill failed for $stagedPath: $e');
+      }
+    }
+    try {
+      ref.read(bookListProvider.notifier).refresh();
+    } catch (_) {}
   }
   // grouping must not depend on any widget still being mounted
   await groupImportedBooks(task.subDirName, importedMd5s, ref);
@@ -1319,8 +1352,9 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
         await PendingImport.save(task);
       }
       progress.update(imported: imported, failed: failed);
-      // yield the main thread between books so UI animations keep running
-      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // yield the main thread between books; reading drops the duty cycle
+      await Future<void>.delayed(
+          Duration(milliseconds: ImportReadingGate.reading ? 150 : 40));
     } catch (e) {
       failed++;
       task.failedNames.add(entry.name);

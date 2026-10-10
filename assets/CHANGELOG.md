@@ -1,3 +1,8 @@
+## 1.15.56
+- Perf(import)!: Aggressive low-power mode while reading — imports detect an open reader and drop to a ~20% CPU duty cycle: the cover (the single most expensive per-book item: image extraction + disk write) is skipped entirely during reading, the inter-book yield grows to 150ms, and after the import finishes all skipped covers are backfilled at full speed automatically. Page turns stay smooth even on large imports; reading comfort no longer trades against import progress
+
+- Perf(导入)!: 激进的阅读期低功耗模式——导入检测到正在看书即降到约 20% CPU 占空比:直接跳过封面(单本最贵的环节:图片解压+写盘),书本间隔拉大到 150 毫秒;导入完成后自动全速补齐所有跳过的封面。大库导入时翻页依旧顺滑,阅读舒适度不再与导入进度互相牺牲
+
 ## 1.15.55
 - Fix(import): The resume dialog swapped the folder name and the remaining count — the generated l10n signature was (count, name) because the placeholders metadata was missing; explicit metadata now pins (name, count), also fixing the delete-folder confirmation which had the same swap
 
