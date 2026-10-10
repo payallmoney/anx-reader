@@ -1,3 +1,8 @@
+## 1.15.36
+- Feat(bookshelf)!: Long-press any shelf cell to enter multi-select with it pre-selected — the previous behaviour (long-press started a drag that showed a book sheet and looked like "dragging, not selecting") is gone: drag-to-reorder was a no-op anyway and its gesture shadowed multi-select; taps still open books/folders, and the top-bar multi-select button still works
+
+- Feat(书架)!: 长按书架任意格子直接进入多选并选中该格——此前长按触发的是拖动(看起来"能拖不能选");拖动重排本就是空操作且其手势挡住了多选,现已禁用;单击仍是打开书/文件夹,顶栏多选按钮同样可用
+
 ## 1.15.35
 - Feat(bookshelf): "Delete folder" action in the folder dialog — removes the folder (and its subfolders) after an explicit confirmation; its books return to the shelf top level, book files are never touched
 

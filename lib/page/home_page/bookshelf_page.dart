@@ -25,6 +25,7 @@ import 'package:anx_reader/utils/saf_tree.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/widgets/bookshelf/book_bottom_sheet.dart';
 import 'package:anx_reader/widgets/bookshelf/book_folder.dart';
+import 'package:anx_reader/widgets/bookshelf/long_press_selection_wrapper.dart';
 import 'package:anx_reader/widgets/bookshelf/sync_button.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/common/tag_chip.dart';
@@ -70,6 +71,17 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
       } else {
         _selectedBookIds.addAll(bookIds);
       }
+    });
+  }
+
+  /// Long-press on a shelf cell: enter multi-select mode with that cell's
+  /// books pre-selected.
+  void _enterSelectMode(Set<int> bookIds) {
+    setState(() {
+      _selectMode = true;
+      _selectedBookIds
+        ..clear()
+        ..addAll(bookIds);
     });
   }
 
@@ -713,35 +725,12 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
             return books.isEmpty
                 ? const Center(child: BookshelfTips())
                 : ReorderableBuilder(
-                    // lock all index of books
-                    lockedIndices: lockedIndices,
-                    enableDraggable: true,
-                    longPressDelay: const Duration(milliseconds: 300),
-                    onReorder: (ReorderedListFunction reorderedListFunction) {},
+                    // drag-to-reorder has no real function (onReorder is a
+                    // no-op) and its long-press gesture shadows multi-select;
+                    // disable dragging entirely — long-press now enters
+                    // multi-select mode on that cell
+                    enableDraggable: false,
                     scrollController: _scrollController,
-                    onDragStarted: (index) {
-                      if (books[index].length == 1 &&
-                          books[index].first.groupId == 0) {
-                        handleBottomSheet(context, books[index].first);
-                        // add other books to lockedIndices
-                        for (int i = 0; i < books.length; i++) {
-                          if (i != index) {
-                            lockedIndices.add(i);
-                          }
-                        }
-                      }
-                    },
-                    onDragEnd: (index) {
-                      // remove all books from lockedIndices
-                      lockedIndices = [];
-                      for (int i = 0; i < books.length; i++) {
-                        if (books[i].length != 1 ||
-                            books[i].first.groupId != 0) {
-                          lockedIndices.add(i);
-                        }
-                      }
-                      setState(() {});
-                    },
                     children: [
                       ...books.map(
                         (book) {
@@ -753,9 +742,8 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                           // single member
                           final isLooseBook =
                               book.length == 1 && book.first.groupId == 0;
+                          final memberIds = book.map((b) => b.id).toSet();
                           if (_selectMode) {
-                            final memberIds =
-                                book.map((b) => b.id).toSet();
                             final selected =
                                 memberIds.every(_selectedBookIds.contains);
                             return GestureDetector(
@@ -791,16 +779,14 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                               ),
                             );
                           }
-                          return isLooseBook
-                              ? CustomDraggable(
-                                  key: topLevelKey,
-                                  data: book.first,
-                                  child: BookFolder(books: book),
-                                )
-                              : BookFolder(
-                                  key: topLevelKey,
-                                  books: book,
-                                );
+                          // long-press any cell starts multi-select with that
+                          // cell picked (drag-to-reorder was disabled: its
+                          // long-press used to shadow this gesture)
+                          return LongPressSelectionWrapper(
+                              key: topLevelKey,
+                              onLongPress: () =>
+                                  _enterSelectMode(memberIds),
+                              child: BookFolder(books: book));
                         },
                       ),
                     ],
