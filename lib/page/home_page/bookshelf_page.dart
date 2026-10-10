@@ -17,6 +17,7 @@ import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/service/import_progress.dart';
+import 'package:anx_reader/service/import_resume.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -267,104 +268,25 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     AnxLog.info(
         'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
-    var copiedCount = 0;
-    var imported = 0;
-    var failed = 0;
-    final importedMd5s = <String>[];
-    final progress = ImportProgressService.instance;
-    progress.start(subDirName, listing.files.length);
-
-    // Phase 1: copy every file into app storage first — sequentially.
-    // Parallel SAF streaming saturated the IO threads on real devices and
-    // made imports slower than serial, while the UI updates starved the
-    // main thread (perceived as an app freeze).
-    final copiedEntries = <SafCopyResult>[];
-    var copyCancelled = false;
-    for (final entry in listing.files) {
-      if (!await progress.checkpoint()) {
-        copyCancelled = true;
-        break;
-      }
-      try {
-        final copied =
-            await SafTree.copyToDir(entry.uri, entry.name, destDir);
-        copiedEntries.add(copied);
-        copiedCount++;
-        progress.update(copied: copiedCount);
-      } catch (e) {
-        failed++;
-        AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
-      }
-    }
-
-    // Phase 2: import the staged copies one by one. Each record is born
-    // with groupId; the floating pill shows live progress and supports
-    // pause/resume/cancel without blocking anything. The shelf refresh is
-    // debounced — a refresh per book rebuilt the whole shelf grid on real
-    // devices and froze the UI.
-    var lastRefresh = DateTime.now();
-    var cancelled = copyCancelled;
-    try {
-      if (progress.state.value.phase != ImportPhase.paused) {
-        progress.update(phase: ImportPhase.importing, imported: 0);
-      }
-      for (final copied in copiedEntries) {
-        if (!await progress.checkpoint()) {
-          cancelled = true;
-          break;
-        }
-        try {
-          await importBook(
-            File(copied.path),
-            ref,
-            precomputedMd5: copied.md5,
-            storageSubDir: subDir,
-            groupId: groupId,
-          );
-          importedMd5s.add(copied.md5);
-          imported++;
-          progress.update(imported: imported, failed: failed);
-          final now = DateTime.now();
-          if (identical(copied, copiedEntries.last) ||
-              now.difference(lastRefresh).inSeconds >= 5) {
-            lastRefresh = now;
-            try {
-              ref.read(bookListProvider.notifier).refresh();
-            } catch (_) {}
-          }
-        } catch (e) {
-          failed++;
-          progress.update(failed: failed);
-          AnxLog.severe(
-              'SAF import: failed ${copied.path.split('/').last}: $e');
-        }
-      }
-    } finally {
-      SmartDialog.dismiss(status: SmartStatus.loading);
-    }
-    // grouping must not depend on the widget still being mounted: imports of
-    // large folders outlive the page (activity recreation, app switch), and
-    // skipping here is exactly how books end up ungrouped on the shelf
-    await _groupImportedBooks(subDirName, importedMd5s);
-    try {
-      ref.read(bookListProvider.notifier).refresh();
-    } catch (_) {}
-    // capture translations up front: the import loop and this epilogue keep
-    // running even when the page is no longer mounted
-    final cancelledMsg = L10n.of(context).importCancelled;
-    final doneMsg = L10n.of(context).importDoneMsg;
-    final cancelledByUser = cancelled ||
-        progress.state.value.phase == ImportPhase.paused;
-    progress.finish(
-      failed: failed > 0 && imported == 0,
-      message: cancelledByUser ? cancelledMsg(imported) : doneMsg(imported),
+    // durable task record: survives an app restart and resumes from the
+    // remaining files on the next launch
+    final task = PendingImport(
+      treeUri: treeUri,
+      subDirName: subDirName,
+      fileNames: listing.files.map((f) => f.name).toList(),
+      doneNames: {},
     );
-    AnxLog.info(
-        'SAF import: done, copied $copiedCount, $imported imported, $failed failed, ${importedMd5s.length} md5s');
-    if (failed > 0 && imported > 0 && mounted) {
-      AnxToast.show(
-          '${L10n.of(context).serviceImportSuccess} ($imported), failed: $failed');
-    }
+    await PendingImport.save(task);
+
+    await resumeImportTask(
+      task: task,
+      listing: listing,
+      subDir: subDir,
+      destDir: destDir,
+      groupId: groupId,
+      ref: ref,
+      context: context,
+    );
   }
 
   /// Put a batch of imported books into a shelf folder named after the
@@ -1089,6 +1011,154 @@ Future<int?> ensureShelfFolder(String groupName) async {
   }
 }
 
+/// Shared two-phase import body (copy remaining files, then import them one
+/// by one), driven by [PendingImport] so an app restart resumes exactly
+/// where the previous run stopped. Also used by the startup auto-resume in
+/// main.dart — [subDir], [destDir] and [groupId] are derived from the task
+/// when omitted, and [context] is optional there (no toasts without it).
+Future<void> resumeImportTask({
+  required PendingImport task,
+  SafTreeListing? listing,
+  String? subDir,
+  String? destDir,
+  int? groupId,
+  required WidgetRef ref,
+  BuildContext? context,
+}) async {
+  listing ??= await SafTree.listBookFiles(task.treeUri);
+  subDir ??= shelfSubDir(task.subDirName);
+  destDir ??= destDirForShelfSubDir(task.subDirName);
+  await Directory(destDir).create(recursive: true);
+  groupId ??= await ensureShelfFolder(task.subDirName);
+
+  // resume-specific: rebuild doneNames from the database so already-
+  // imported books (any prior run) are skipped WITHOUT spawning a webview
+  // — a webview per already-present book both wastes ~3s each and, worse,
+  // concurrent metadata extractions overwrite the shared import temp file
+  // (Server.setTempFile is a singleton), stalling the whole queue
+  try {
+    final db = await DBHelper().database;
+    final rows = await db.query('tb_books',
+        where: 'is_deleted = 0', columns: ['file_path']);
+    final storedBasenames = rows
+        .map((r) => ((r['file_path'] as String?) ?? '').split('/').last)
+        .toSet();
+    for (final name in task.fileNames) {
+      if (storedBasenames.contains(name)) {
+        task.doneNames.add(name);
+      }
+    }
+    await PendingImport.save(task);
+  } catch (e) {
+    AnxLog.warning('Import resume: db sync of done names failed: $e');
+  }
+  final remainingFiles = listing.files
+      .where((f) => !task.doneNames.contains(f.name))
+      .toList();
+
+  var copiedCount = task.doneNames.length;
+  var imported = 0;
+  var failed = 0;
+  final importedMd5s = <String>[];
+  final progress = ImportProgressService.instance;
+  progress.start(task.subDirName, task.fileNames.length);
+  progress.update(copied: copiedCount);
+
+  // Phase 1: copy every remaining file into app storage first —
+  // sequentially (parallel SAF streaming froze real devices; see 1.15.37).
+  final copiedEntries = <SafCopyResult>[];
+  var copyCancelled = false;
+  for (final entry in remainingFiles) {
+    if (!await progress.checkpoint()) {
+      copyCancelled = true;
+      break;
+    }
+    try {
+      final copied = await SafTree.copyToDir(entry.uri, entry.name, destDir);
+      copiedEntries.add(copied);
+      copiedCount++;
+      progress.update(copied: copiedCount);
+    } catch (e) {
+      failed++;
+      AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
+    }
+  }
+
+  // Phase 2: import the staged copies one by one; shelf refresh is
+  // debounced (a per-book refresh rebuilt the whole grid and froze UIs).
+  var lastRefresh = DateTime.now();
+  var cancelled = copyCancelled;
+  try {
+    if (progress.state.value.phase != ImportPhase.paused) {
+      progress.update(phase: ImportPhase.importing, imported: 0);
+    }
+    for (final copied in copiedEntries) {
+      if (!await progress.checkpoint()) {
+        cancelled = true;
+        break;
+      }
+      try {
+        await importBook(
+          File(copied.path),
+          ref,
+          precomputedMd5: copied.md5,
+          storageSubDir: subDir,
+          groupId: groupId,
+        );
+        importedMd5s.add(copied.md5);
+        imported++;
+        task.doneNames.add(copied.path.split('/').last);
+        progress.update(imported: imported, failed: failed);
+        // persist resume state every few books (cheap JSON write)
+        if (imported % 3 == 0) {
+          await PendingImport.save(task);
+        }
+        final now = DateTime.now();
+        if (identical(copied, copiedEntries.last) ||
+            now.difference(lastRefresh).inSeconds >= 5) {
+          lastRefresh = now;
+          try {
+            ref.read(bookListProvider.notifier).refresh();
+          } catch (_) {}
+        }
+      } catch (e) {
+        failed++;
+        task.failedNames.add(copied.path.split('/').last);
+        progress.update(failed: failed);
+        AnxLog.severe(
+            'SAF import: failed ${copied.path.split('/').last}: $e');
+      }
+    }
+    await PendingImport.save(task);
+  } finally {
+    SmartDialog.dismiss(status: SmartStatus.loading);
+  }
+  // grouping must not depend on any widget still being mounted
+  await groupImportedBooks(task.subDirName, importedMd5s, ref);
+  try {
+    ref.read(bookListProvider.notifier).refresh();
+  } catch (_) {}
+  final cancelledByUser =
+      cancelled || progress.state.value.phase == ImportPhase.paused;
+  progress.finish(
+    failed: failed > 0 && imported == 0,
+    message: context == null
+        ? ''
+        : (cancelledByUser
+            ? L10n.of(context).importCancelled(imported)
+            : L10n.of(context).importDoneMsg(imported)),
+  );
+  // task fully done -> drop the resume record; cancelled/paused -> keep it
+  // so the next app start picks up the remaining files
+  if (!cancelledByUser && task.remaining == 0) {
+    await PendingImport.clear();
+  } else {
+    await PendingImport.save(task);
+  }
+  AnxLog.info(
+      'SAF import: done, copied $copiedCount, $imported imported, $failed failed, ${importedMd5s.length} md5s, remaining ${task.remaining}');
+}
+
 /// Put a batch of imported books into a shelf folder named after the
 /// source folder; the folder is created when missing. Group ids follow
 /// the app convention of reusing a member book's id.
@@ -1204,6 +1274,16 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   AnxLog.info(
       'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
+  // durable resume record, same as the manual path: an app restart during
+  // this import continues it on the next launch
+  final task = PendingImport(
+    treeUri: treeUri,
+    subDirName: subDirName,
+    fileNames: listing.files.map((f) => f.name).toList(),
+    doneNames: {},
+  );
+  await PendingImport.save(task);
+
   // phase 1: copy everything into app storage
   var imported = 0;
   var failed = 0;
@@ -1239,6 +1319,10 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       );
       importedMd5s.add(copied.md5);
       imported++;
+      task.doneNames.add(copied.path.split('/').last);
+      if (imported % 3 == 0) {
+        await PendingImport.save(task);
+      }
       progress.update(imported: imported, failed: failed);
     } catch (e) {
       failed++;
@@ -1246,6 +1330,13 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       AnxLog.severe(
           'SAF import: failed ${copied.path.split('/').last}: $e');
     }
+  }
+  await PendingImport.save(task);
+  final cancelledByUser =
+      progress.state.value.phase == ImportPhase.paused ||
+          task.remaining > 0;
+  if (!cancelledByUser) {
+    await PendingImport.clear();
   }
   progress.finish(failed: failed > 0 && imported == 0);
   await groupImportedBooks(subDirName, importedMd5s, ref);

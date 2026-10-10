@@ -1,3 +1,10 @@
+## 1.15.40
+- Feat(import): Interrupted folder imports now survive an app restart — the task (folder, file list, progress) is persisted while importing, and on the next launch the floating pill reappears and the remaining files continue automatically; a resume also reconciles against the library first so already-imported books are skipped without re-processing
+- Fix(import): Book metadata extraction is now serialized with a global lock — the import temp file is a singleton, so overlapping extractions (possible when resuming over an existing library) overwrote each other's URL and stalled the queue
+
+- Feat(导入): 导入中断后重启应用可自动续传——导入期间任务(文件夹、文件清单、进度)持续落盘,下次启动悬浮进度条自动恢复,剩余文件继续导入;续导前先与书库对账,已入库的书直接跳过不再处理
+- Fix(导入): 书籍元数据提取加全局串行锁——导入临时文件是单例,重叠的提取(续导叠加已有书库时可能发生)会互相覆盖地址导致队列停滞
+
 ## 1.15.37
 - Fix(import): Imports no longer freeze the app — the parallel file copy saturated IO threads on real devices (slower than serial, not faster) and the per-book shelf refresh rebuilt the whole grid every few books; copying is sequential again, shelf refreshes are debounced to at most one per 5 seconds, and the progress pill throttles its updates (300ms) behind a repaint boundary
 - Fix(导入): 导入不再卡死应用——并行文件复制在真机上反而拖慢 IO(串行更快),且逐本刷新书架每几本就重建整个网格;已改回串行复制,书架刷新去抖为至多每 5 秒一次,进度胶囊更新节流(300 毫秒)并加重绘隔离

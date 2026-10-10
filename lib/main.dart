@@ -17,6 +17,8 @@ import 'package:anx_reader/service/tts/system_tts.dart';
 import 'package:anx_reader/service/tts/tts_service.dart' as tts_service;
 import 'package:anx_reader/service/tts/tts_handler.dart';
 import 'package:anx_reader/service/book.dart';
+import 'package:anx_reader/service/import_progress.dart';
+import 'package:anx_reader/service/import_resume.dart';
 import 'package:anx_reader/service/shelf_groups.dart';
 import 'package:anx_reader/widgets/common/import_progress_bar.dart';
 import 'package:anx_reader/dao/book.dart';
@@ -137,6 +139,20 @@ class _MyAppState extends ConsumerState<MyApp>
         if (!mounted) return;
         ref.invalidate(bookListProvider);
       });
+      // resume a folder import that an app restart interrupted: the
+      // floating pill reappears and the remaining files continue
+      try {
+        final pending = await PendingImport.load();
+        if (pending != null && pending.remaining > 0) {
+          AnxLog.info(
+              'Resuming folder import "${pending.subDirName}": ${pending.remaining} files left');
+          await resumeImportTask(task: pending, ref: ref);
+        } else if (pending != null) {
+          await PendingImport.clear();
+        }
+      } catch (e) {
+        AnxLog.severe('Pending import resume failed: $e');
+      }
     });
   }
 

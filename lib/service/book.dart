@@ -695,7 +695,37 @@ Future<void> saveBook(
   return;
 }
 
+/// Serializes metadata extraction: Server().setTempFile is a singleton, so
+/// two concurrent headless webviews would overwrite each other's temp URL
+/// and both stall. A global lock keeps exactly one import webview alive.
+Future<void> _metadataLockTail = Future.value();
+
 Future<void> getBookMetadata(
+  File file, {
+  Book? book,
+  String? md5,
+  WidgetRef? ref,
+  String? storageSubDir,
+  String? preferredName,
+  int? groupId,
+}) {
+  // chain onto the previous extraction; errors must not break the chain
+  final run = _metadataLockTail
+      .catchError((_) {})
+      .then((_) => _getBookMetadataLocked(
+            file,
+            book: book,
+            md5: md5,
+            ref: ref,
+            storageSubDir: storageSubDir,
+            preferredName: preferredName,
+            groupId: groupId,
+          ));
+  _metadataLockTail = run;
+  return run;
+}
+
+Future<void> _getBookMetadataLocked(
   File file, {
   Book? book,
   String? md5,
