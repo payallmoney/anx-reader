@@ -1,3 +1,8 @@
+## 1.15.60
+- Feat(bookshelf): The "New folder" chip in the folder dialog is now an icon-only chip (folder+ icon, tooltip kept), and the title-bar action icons (edit / dissolve / delete) are evenly spaced — the rename hint pencil stays attached to the folder name it belongs to
+
+- Feat(书架): 文件夹弹窗的"新建文件夹"改为纯图标 chip(文件夹+图标,保留悬浮提示);标题栏操作图标(编辑/解散/删除)等距排列,重命名提示铅笔紧贴它所属的文件夹名
+
 ## 1.15.59
 - Feat(import)!: Folder imports now run as an Android foreground service — starting an import posts a persistent progress notification, holds a wake lock, and keeps the import running while the app is backgrounded or the screen locks (system no longer freezes it). The notification clears and the service stops automatically when the import finishes or is cancelled; the persisted resume task remains the safety net if the process is killed
 - Feat(导入)!: 文件夹导入升级为 Android 前台服务——开始导入即发出常驻进度通知并持有唤醒锁,app 退后台或锁屏后系统不再冻结导入;导入完成或取消时通知与自动清除,进程万一被杀仍有持久化断点兜底

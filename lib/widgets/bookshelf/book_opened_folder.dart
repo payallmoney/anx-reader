@@ -240,104 +240,111 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                 ),
               ],
             )
-          : InkWell(
-              onTap: () {
-                setState(() {
-                  isEditingName = true;
-                });
-              },
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      currentGroupName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.drive_file_rename_outline,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  // folder actions as icons in the top-right corner
-                  _folderActionIcon(
-                    tooltip: isEditing
-                        ? L10n.of(context).commonCancel
-                        : L10n.of(context).commonEdit,
-                    icon: isEditing ? Icons.close : Icons.edit_outlined,
+          : Row(
+              children: [
+                // tap the name to rename it
+                Expanded(
+                  child: InkWell(
                     onTap: () {
                       setState(() {
-                        isEditing = !isEditing;
+                        isEditingName = true;
                       });
                     },
-                  ),
-                  _folderActionIcon(
-                    tooltip: L10n.of(context).commonDissolve,
-                    icon: Icons.call_split,
-                    onTap: () async {
-                      final l10n = L10n.of(context);
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: Text(l10n.commonDissolve),
-                          content: Text(l10n.bookshelfDissolveFolderConfirm(
-                              currentGroupName, books.length)),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: Text(l10n.commonCancel),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            currentGroupName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
                             ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: Text(l10n.commonConfirm),
-                            ),
-                          ],
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      );
-                      if (confirmed != true || !mounted) return;
-                      ref.read(bookListProvider.notifier).dissolveGroup(books);
-                      if (mounted) Navigator.pop(context);
-                    },
-                  ),
-                  _folderActionIcon(
-                    tooltip: L10n.of(context).bookshelfDeleteFolder,
-                    icon: Icons.delete_outline,
-                    color: Colors.red,
-                    onTap: () async {
-                      final l10n = L10n.of(context);
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: Text(l10n.bookshelfDeleteFolder),
-                          content: Text(l10n.bookshelfDeleteFolderConfirm(
-                              currentGroupName, books.length)),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: Text(l10n.commonCancel),
-                            ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: Text(l10n.commonDelete),
-                            ),
-                          ],
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.drive_file_rename_outline,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                      );
-                      if (confirmed != true || !mounted) return;
-                      ref.read(bookListProvider.notifier).dissolveGroup(books);
-                      if (mounted) Navigator.pop(context);
-                    },
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+                // folder actions: equal-spaced icons in the top-right corner
+                _folderActionIcon(
+                  tooltip: isEditing
+                      ? L10n.of(context).commonCancel
+                      : L10n.of(context).commonEdit,
+                  icon: isEditing ? Icons.close : Icons.edit_outlined,
+                  onTap: () {
+                    setState(() {
+                      isEditing = !isEditing;
+                    });
+                  },
+                ),
+                _folderActionIcon(
+                  tooltip: L10n.of(context).commonDissolve,
+                  icon: Icons.call_split,
+                  onTap: () async {
+                    final l10n = L10n.of(context);
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(l10n.commonDissolve),
+                        content: Text(l10n.bookshelfDissolveFolderConfirm(
+                            currentGroupName, books.length)),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: Text(l10n.commonCancel),
+                          ),
+                          FilledButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
+                            child: Text(l10n.commonConfirm),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true || !mounted) return;
+                    ref.read(bookListProvider.notifier).dissolveGroup(books);
+                    if (mounted) Navigator.pop(context);
+                  },
+                ),
+                _folderActionIcon(
+                  tooltip: L10n.of(context).bookshelfDeleteFolder,
+                  icon: Icons.delete_outline,
+                  color: Colors.red,
+                  onTap: () async {
+                    final l10n = L10n.of(context);
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(l10n.bookshelfDeleteFolder),
+                        content: Text(l10n.bookshelfDeleteFolderConfirm(
+                            currentGroupName, books.length)),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: Text(l10n.commonCancel),
+                          ),
+                          FilledButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
+                            child: Text(l10n.commonDelete),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true || !mounted) return;
+                    ref.read(bookListProvider.notifier).dissolveGroup(books);
+                    if (mounted) Navigator.pop(context);
+                  },
+                ),
+              ],
             ),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.7,
@@ -356,10 +363,16 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                     onPressed: () => _openSubFolder(folder),
                   ),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.add, size: 18),
-                  label: Text(L10n.of(context).bookshelfNewFolder),
-                  onPressed: _createSubFolder,
+                Tooltip(
+                  message: L10n.of(context).bookshelfNewFolder,
+                  child: ActionChip(
+                    avatar: const Icon(
+                      Icons.create_new_folder_outlined,
+                      size: 18,
+                    ),
+                    label: const SizedBox.shrink(),
+                    onPressed: _createSubFolder,
+                  ),
                 ),
               ],
             ),
