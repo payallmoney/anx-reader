@@ -351,6 +351,32 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
       ),
       actions: [
         TextButton(
+            onPressed: () async {
+              final l10n = L10n.of(context);
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: Text(l10n.bookshelfDeleteFolder),
+                  content: Text(l10n.bookshelfDeleteFolderConfirm(
+                      currentGroupName, books.length)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: Text(l10n.commonCancel),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: Text(l10n.commonDelete),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true || !mounted) return;
+              ref.read(bookListProvider.notifier).dissolveGroup(books);
+              if (mounted) Navigator.pop(context);
+            },
+            child: Text(L10n.of(context).bookshelfDeleteFolder)),
+        TextButton(
             onPressed: () {
               ref.read(bookListProvider.notifier).dissolveGroup(books);
               Navigator.pop(context);

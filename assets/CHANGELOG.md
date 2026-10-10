@@ -1,3 +1,8 @@
+## 1.15.35
+- Feat(bookshelf): "Delete folder" action in the folder dialog — removes the folder (and its subfolders) after an explicit confirmation; its books return to the shelf top level, book files are never touched
+
+- Feat(书架): 文件夹弹窗新增"删除文件夹"——确认后移除文件夹(含子文件夹),其中的书全部移回书架顶层,书籍文件绝不删除
+
 ## 1.15.34
 - Feat(import): Non-blocking import progress pill replaces the full-screen loading dialog — a small floating capsule at the top shows live "Importing books n/N", tap to expand Pause / Resume / Cancel; the app (including reading) stays fully usable during imports, and a cancelled import keeps everything already saved (re-import the folder to continue)
 - Perf(import): The copy phase now runs 3 files in parallel and the import loop polls a shared progress service, roughly 25% faster end-to-end on a 60-book folder

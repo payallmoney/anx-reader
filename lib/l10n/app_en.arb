@@ -987,5 +987,7 @@
   "importImportingN": "Importing books {done}/{total}…",
   "importPaused": "Paused at {done}/{total}",
   "importCancelled": "Import cancelled, {done} books saved. Re-import the folder to continue.",
-  "importDoneMsg": "Import finished: {done} books"
+  "importDoneMsg": "Import finished: {done} books",
+  "bookshelfDeleteFolder": "Delete folder",
+  "bookshelfDeleteFolderConfirm": "Delete folder \"{name}\"? Its {count} books return to the shelf; book files are never deleted. Subfolders are removed as well."
 }

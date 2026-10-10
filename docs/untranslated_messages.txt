@@ -79,7 +79,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "de": [
@@ -162,7 +164,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "es": [
@@ -245,7 +249,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "fr": [
@@ -328,7 +334,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "it": [
@@ -411,7 +419,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "ja": [
@@ -494,7 +504,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "ko": [
@@ -577,7 +589,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "pt": [
@@ -660,7 +674,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "ro": [
@@ -743,7 +759,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "ru": [
@@ -826,7 +844,9 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ],
 
   "tr": [
@@ -909,6 +929,8 @@
     "importImportingN",
     "importPaused",
     "importCancelled",
-    "importDoneMsg"
+    "importDoneMsg",
+    "bookshelfDeleteFolder",
+    "bookshelfDeleteFolderConfirm"
   ]
 }

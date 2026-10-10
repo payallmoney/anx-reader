@@ -987,5 +987,7 @@
   "importImportingN": "正在导入书籍 {done}/{total}…",
   "importPaused": "已暂停 ({done}/{total})",
   "importCancelled": "导入已取消,已保存 {done} 本。重新导入该文件夹可继续。",
-  "importDoneMsg": "导入完成,共 {done} 本"
+  "importDoneMsg": "导入完成,共 {done} 本",
+  "bookshelfDeleteFolder": "删除文件夹",
+  "bookshelfDeleteFolderConfirm": "删除文件夹\"{name}\"?其中 {count} 本书将移回书架(书籍文件不会被删除),子文件夹也会一并移除。"
 }
