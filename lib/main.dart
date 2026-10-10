@@ -132,8 +132,8 @@ class _MyAppState extends ConsumerState<MyApp>
     // heal shelf folders from the storage layout once after startup so
     // records imported by older versions get grouped without a re-import
     Future.delayed(const Duration(seconds: 6), () async {
-      if (!mounted) return;
       await reconcileShelfGroups(onChanged: () {
+        if (!mounted) return;
         ref.invalidate(bookListProvider);
       });
     });

@@ -641,6 +641,10 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     List<int> lockedIndices = [];
 
     Widget buildBookshelfBody = ref.watch(bookListProvider).when(
+          // keep the current shelf visible while the list reloads (folder
+          // changes, post-import refresh) — only the very first load spins
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           data: (books) {
             for (int i = 0; i < books.length; i++) {
               // folder can't be dragged

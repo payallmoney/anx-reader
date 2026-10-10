@@ -9,6 +9,7 @@ import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart'
     show kNoTagFilterId, tagSelectionProvider;
+import 'package:anx_reader/utils/log/common.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -59,7 +60,12 @@ class BookList extends _$BookList {
       }).toList();
     }
 
-    final rootFolders = groups.where((g) => (g.parentId ?? 0) == 0).toList()
+    // id 0 is the pseudo "Root" group that every database carries — it is
+    // not a shelf folder, otherwise all loose books would additionally be
+    // wrapped into a folder called "Root"
+    final rootFolders = groups
+        .where((g) => g.id != 0 && (g.parentId ?? 0) == 0)
+        .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     for (final folder in rootFolders) {
       var members = books.where((b) => b.groupId == folder.id).toList();
@@ -171,9 +177,16 @@ class BookList extends _$BookList {
     }
 
     final sortedBooks = sortBooks(filteredByTags);
-    // watch the folder list so shelf folders refresh when groups change
-    final groups = ref.watch(groupDaoProvider).value ?? [];
-    return groupBooks(sortedBooks, groups);
+    // await the folder list so the FIRST build is already correct — reading
+    // `.value` built the list once with no folders and rebuilt it all over
+    // again when the folder query landed (double db query + sort, and the
+    // shelf spinner ran twice on entry)
+    final groups = await ref.watch(groupDaoProvider.future);
+    final sw = Stopwatch()..start();
+    final result = groupBooks(sortedBooks, groups);
+    AnxLog.info(
+        'booklist built: ${books.length} books, ${result.length} cells in ${sw.elapsedMilliseconds}ms');
+    return result;
   }
 
   @override

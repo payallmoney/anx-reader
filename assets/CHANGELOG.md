@@ -1,3 +1,12 @@
+## 1.15.27
+- Fix(bookshelf): Entering the bookshelf no longer spins repeatedly — the folder list was read as a side watch, so the shelf built twice per entry (once with no folders, then again when the folder query landed) and every reload flashed the loading spinner; the list now awaits folders in a single build and reloads keep the shelf on screen
+- Fix(bookshelf): Loose books no longer appear twice — the built-in pseudo "Root" group was treated as a shelf folder and wrapped every ungrouped book into an extra folder cell
+- Perf(startup): The one-time folder migration loads live groups in one query and applies its updates in a single transaction; it exits instantly when nothing matches
+
+- Fix(书架): 进入书架不再反复转圈——文件夹列表此前作为旁路监听,书架每次进入都构建两遍(先无文件夹、分组查询返回后重来),且每次重载都闪加载圈;现在单次构建内等待分组数据,重载时保留当前书架画面
+- Fix(书架): 散书不再显示两遍——内置的 "Root" 伪分组被当成了书架文件夹,把所有未分组书额外包进了一个文件夹格子
+- Perf(启动): 一次性文件夹迁移改为单查询活分组+事务批量更新,无可迁移数据时瞬时跳过
+
 ## 1.15.26
 - Fix(tts): Screen-off narration no longer jumps back to an earlier chapter — the fallback used a tolerant text match over the whole book, so a chapter heading could match its own duplicate in the table of contents (or any repeated phrase) and narration resumed chapters behind. Positioning now trusts the continuously-synced sentence index first, matches text only locally around the cursor, and cursor syncing never wraps back to the book start
 - Fix(书架): 息屏续读不再跳回前面的章节——兜底定位此前对全书做宽容文本匹配,章节标题会命中目录页里的同名条目(或任何重复短语),导致从几章之前的位置续读。现在优先使用持续同步的句子索引,文本匹配只在游标附近局部进行,游标同步也不再回卷到书首
