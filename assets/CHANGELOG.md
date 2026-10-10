@@ -1,3 +1,12 @@
+## 1.15.31 / 1.15.32
+- Fix(import)!: Folder import is now two-phase exactly as requested — first create the shelf folder and copy every file into app storage, then import them one by one; the folder exists from the very start and can only ever appear once, no more one-folder-per-file flashes that only corrected themselves after an app restart
+- Fix(import): The loading dialog now reports live progress (n books saved) instead of freezing on "copying", and the shelf refreshes as books land inside the folder
+- Fix(import): Covers without inline base64 data no longer throw during import (books with external/broken covers now save cleanly instead of erroring)
+
+- Fix(导入)!: 文件夹导入改为按需求的两阶段——先建书架文件夹并把所有文件复制进应用存储,再逐本导入;文件夹从第一步起就存在且只会出现一个,不再出现"每个文件闪一个目录、重启后才恢复正常"的现象
+- Fix(导入): 加载提示现在实时显示进度(已导入 N 本),不再是卡住的"正在复制";书落入文件夹时书架同步刷新
+- Fix(导入): 无内嵌 base64 数据的封面导入时不再抛错(封面缺失/外链的书现在能正常入库)
+
 ## 1.15.30
 - Fix(import)!: Folder imports create the shelf folder BEFORE copying and every imported book record is born with its group membership; updating an existing record through a re-import no longer resets its folder (saveBook never passed group_id, so a late webview metadata callback after the grouping pass silently moved books back to the shelf root — the folder stayed empty and invisible, which only reproduced on slow real devices)
 - Fix(书架): 文件夹导入改为先建书架文件夹、每本书落库即带分组;重新导入更新旧记录不再把分组重置回书架顶层(saveBook 此前从不写 group_id,webview 元数据回调晚于分组步骤时会把书悄悄移出文件夹——文件夹因此空了不显示,该竞争只在真机上复现)

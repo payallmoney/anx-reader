@@ -254,14 +254,19 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     AnxLog.info(
         'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
+    var copiedCount = 0;
     var imported = 0;
     var failed = 0;
     final importedMd5s = <String>[];
     // capture translations up front: the loop below must keep running even
     // when the page is no longer mounted (long imports)
     final copyingMsg = L10n.of(context).importCopyingBooks;
-    SmartDialog.showLoading(
-        msg: copyingMsg(0, listing.files.length));
+
+    // Phase 1: copy every file into app storage first. No webview work
+    // happens here, so the shelf list cannot refresh mid-import and show
+    // one folder cell per half-imported file.
+    SmartDialog.showLoading(msg: copyingMsg(0, listing.files.length));
+    final copiedEntries = <SafCopyResult>[];
     try {
       for (var i = 0; i < listing.files.length; i++) {
         final entry = listing.files[i];
@@ -270,6 +275,21 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
         try {
           final copied =
               await SafTree.copyToDir(entry.uri, entry.name, destDir);
+          copiedEntries.add(copied);
+          copiedCount++;
+        } catch (e) {
+          failed++;
+          AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
+        }
+      }
+
+      // Phase 2: import the staged copies one by one. Each record is born
+      // with groupId; refresh the shelf periodically so the user sees
+      // books appear inside the ONE folder instead of a frozen spinner.
+      final importingMsg = L10n.of(context).serviceImportSuccess;
+      for (var i = 0; i < copiedEntries.length; i++) {
+        final copied = copiedEntries[i];
+        try {
           await importBook(
             File(copied.path),
             ref,
@@ -279,9 +299,18 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           );
           importedMd5s.add(copied.md5);
           imported++;
+          // periodic visible progress: refresh without leaving loading state
+          if (imported % 3 == 0 || i == copiedEntries.length - 1) {
+            SmartDialog.showLoading(
+                msg: '$importingMsg ($imported/${copiedEntries.length})');
+            try {
+              ref.read(bookListProvider.notifier).refresh();
+            } catch (_) {}
+          }
         } catch (e) {
           failed++;
-          AnxLog.severe('SAF import: failed ${entry.name}: $e');
+          AnxLog.severe(
+              'SAF import: failed ${copied.path.split('/').last}: $e');
         }
       }
     } finally {
@@ -291,8 +320,11 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     // large folders outlive the page (activity recreation, app switch), and
     // skipping here is exactly how books end up ungrouped on the shelf
     await _groupImportedBooks(subDirName, importedMd5s);
+    try {
+      ref.read(bookListProvider.notifier).refresh();
+    } catch (_) {}
     AnxLog.info(
-        'SAF import: done, $imported imported, $failed failed, ${importedMd5s.length} md5s');
+        'SAF import: done, copied $copiedCount, $imported imported, $failed failed, ${importedMd5s.length} md5s');
     if (failed > 0 && mounted) {
       AnxToast.show(
           '${L10n.of(context).serviceImportSuccess} ($imported), failed: $failed');
@@ -1162,11 +1194,22 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   AnxLog.info(
       'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
+  // phase 1: copy everything into app storage
   var imported = 0;
   final importedMd5s = <String>[];
+  final copiedEntries = <SafCopyResult>[];
   for (final entry in listing.files) {
     try {
       final copied = await SafTree.copyToDir(entry.uri, entry.name, destDir);
+      copiedEntries.add(copied);
+    } catch (e) {
+      AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
+    }
+  }
+
+  // phase 2: import the staged copies
+  for (final copied in copiedEntries) {
+    try {
       await importBook(
         File(copied.path),
         ref,
@@ -1177,7 +1220,8 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       importedMd5s.add(copied.md5);
       imported++;
     } catch (e) {
-      AnxLog.severe('SAF import: failed ${entry.name}: $e');
+      AnxLog.severe(
+          'SAF import: failed ${copied.path.split('/').last}: $e');
     }
   }
   await groupImportedBooks(subDirName, importedMd5s, ref);

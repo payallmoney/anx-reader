@@ -6,7 +6,10 @@ import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/utils/log/common.dart';
 
 Future<String> saveImageToLocal(String? imageFile, String name) async {
-  if (imageFile == null) {
+  // only data URIs ("data:image/png;base64,....") carry inline bytes; an
+  // empty string or a bare URL has no comma and used to throw a RangeError
+  // on parts[1]
+  if (imageFile == null || !imageFile.contains(',')) {
     return name;
   }
   try {
