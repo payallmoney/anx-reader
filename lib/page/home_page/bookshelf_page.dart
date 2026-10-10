@@ -1072,7 +1072,6 @@ Future<void> resumeImportTask({
   // a resume never repeats work. A staged copy from an earlier interrupted
   // run is reused when its size matches (no re-copy), and the md5 is then
   // computed on import.
-  var lastRefresh = DateTime.now();
   var cancelled = false;
   try {
     for (final entry in remainingFiles) {
@@ -1101,6 +1100,7 @@ Future<void> resumeImportTask({
           precomputedMd5: md5,
           storageSubDir: subDir,
           groupId: groupId,
+          refreshShelf: false,
         );
         if (md5 != null) importedMd5s.add(md5);
         processed++;
@@ -1110,15 +1110,13 @@ Future<void> resumeImportTask({
         if (processed % 3 == 0) {
           await PendingImport.save(task);
         }
-        final now = DateTime.now();
-        if (identical(entry, remainingFiles.last) ||
-            (!ImportReadingGate.reading &&
-                now.difference(lastRefresh).inSeconds >= 5)) {
-          lastRefresh = now;
-          try {
-            ref.read(bookListProvider.notifier).refresh();
-          } catch (_) {}
-        }
+        // yield the main thread between books: with hundreds of books the
+        // import loop would otherwise saturate the UI (animations freeze)
+        await Future<void>.delayed(const Duration(milliseconds: 15));
+        // NO periodic shelf refresh during the import: every refresh is a
+        // full query + pinyin sort + grid rebuild, which on large libraries
+        // starves the UI and breaks open dialogs (books floating above the
+        // dialog scrim). The shelf is refreshed once at the end.
       } catch (e) {
         failed++;
         task.failedNames.add(entry.name);
@@ -1299,6 +1297,7 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
         precomputedMd5: copied.md5,
         storageSubDir: subDir,
         groupId: groupId,
+        refreshShelf: false,
       );
       importedMd5s.add(copied.md5);
       imported++;
@@ -1307,6 +1306,8 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
         await PendingImport.save(task);
       }
       progress.update(imported: imported, failed: failed);
+      // yield the main thread between books so UI animations keep running
+      await Future<void>.delayed(const Duration(milliseconds: 15));
     } catch (e) {
       failed++;
       task.failedNames.add(entry.name);

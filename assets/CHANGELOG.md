@@ -1,3 +1,7 @@
+## 1.15.48 / 1.15.49
+- Perf(import)!: Folder imports no longer compete with the UI for the main thread — each imported book used to trigger a full shelf rebuild (query + pinyin sort + grid rebuild with animations), which on a 630-book library froze every animation and broke open dialogs (cells floating above the dialog scrim); the shelf now stays completely untouched during the import and is rebuilt once at the end, and the import loop yields the main thread 15ms between books
+- Perf(导入)!: 文件夹导入不再与界面抢主线程——此前每导入一本就全量重建书架(查询+拼音排序+网格动画重建),630 本的库会让所有动画冻住、打开的弹窗出现格子浮层的错乱;现在导入期间书架完全静止,结束时一次性重建,并且每本之间主动让出主线程 15 毫秒
+
 ## 1.15.47
 - Refactor(import)!: One pipeline iteration per book — copy, import and the resume checkpoint complete together, and the sequence number is persisted immediately; a resume therefore never repeats work. A staged copy left by an interrupted run is reused when its file size matches (corrupt partial copies are detected and re-copied); the separate copy-then-import phases are gone
 - Refactor(导入)!: 每本书一个流水线迭代——复制、导入、断点记录一次完成,序号立刻落盘;恢复导入绝不重复已做的工作。上次中断留下的已复制文件在校验大小一致后直接复用(不完整的部分副本会被识别并重新复制);独立的"先复制后导入"两阶段已移除

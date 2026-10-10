@@ -440,7 +440,10 @@ void _showImportDialog(
 }
 
 Future<void> importBook(File file, WidgetRef ref,
-    {String? precomputedMd5, String? storageSubDir, int? groupId}) async {
+    {String? precomputedMd5,
+    String? storageSubDir,
+    int? groupId,
+    bool refreshShelf = true}) async {
   // keep the original file name for converted/templated outputs so no
   // numeric suffix sneaks into the stored file name
   final preferredName = path.basenameWithoutExtension(file.path);
@@ -467,8 +470,14 @@ Future<void> importBook(File file, WidgetRef ref,
       ref: ref,
       storageSubDir: storageSubDir,
       preferredName: preferredName,
-      groupId: groupId);
-  ref.read(bookListProvider.notifier).refresh();
+      groupId: groupId,
+      refreshShelf: refreshShelf);
+  // folder-import callers suppress this: a per-book refresh is a full
+  // query + pinyin sort + grid rebuild, which on large libraries starves
+  // the main thread (frozen animations); they refresh once at the end
+  if (refreshShelf) {
+    ref.read(bookListProvider.notifier).refresh();
+  }
 }
 
 Future<void> pushToReadingPage(
@@ -713,6 +722,7 @@ Future<void> getBookMetadata(
   String? storageSubDir,
   String? preferredName,
   int? groupId,
+  bool refreshShelf = true,
 }) {
   // chain onto the previous extraction; errors must not break the chain
   final run = _metadataLockTail
@@ -725,6 +735,7 @@ Future<void> getBookMetadata(
             storageSubDir: storageSubDir,
             preferredName: preferredName,
             groupId: groupId,
+            refreshShelf: refreshShelf,
           ));
   _metadataLockTail = run;
   return run;
@@ -738,6 +749,7 @@ Future<void> _getBookMetadataLocked(
   String? storageSubDir,
   String? preferredName,
   int? groupId,
+  bool refreshShelf = true,
 }) async {
   // PRIMARY path: pure-Dart extraction inside an isolate. No webview, no
   // main-thread contention — imports keep flowing while the user reads,
@@ -764,7 +776,8 @@ Future<void> _getBookMetadataLocked(
           preferredName: preferredName,
           groupId: groupId,
         );
-        ref?.read(bookListProvider.notifier).refresh();
+        // shelf refresh is controlled by importBook (folder imports batch
+        // it to the end)
         return;
       }
       AnxLog.warning(
@@ -827,7 +840,10 @@ Future<void> _getBookMetadataLocked(
               preferredName: preferredName,
               groupId: groupId,
             );
-            ref?.read(bookListProvider.notifier).refresh();
+            // shelf refresh is controlled by importBook's tail
+            if (refreshShelf) {
+              ref?.read(bookListProvider.notifier).refresh();
+            }
           });
     },
     onConsoleMessage: (controller, message, {required isError}) {
