@@ -1,3 +1,7 @@
+## 1.15.30
+- Fix(import)!: Folder imports create the shelf folder BEFORE copying and every imported book record is born with its group membership; updating an existing record through a re-import no longer resets its folder (saveBook never passed group_id, so a late webview metadata callback after the grouping pass silently moved books back to the shelf root — the folder stayed empty and invisible, which only reproduced on slow real devices)
+- Fix(书架): 文件夹导入改为先建书架文件夹、每本书落库即带分组;重新导入更新旧记录不再把分组重置回书架顶层(saveBook 此前从不写 group_id,webview 元数据回调晚于分组步骤时会把书悄悄移出文件夹——文件夹因此空了不显示,该竞争只在真机上复现)
+
 ## 1.15.29
 - Fix(import): Importing a folder again always (re)creates the shelf folder and assigns the imported books into it — books already sitting in another live folder were mistaken for manually organised and skipped, so re-imports stopped creating the folder; this also self-heals shelves where older buggy imports left books in junk-named folders
 

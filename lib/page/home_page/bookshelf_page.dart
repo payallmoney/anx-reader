@@ -247,8 +247,12 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     final subDir = shelfSubDir(subDirName);
     final destDir = destDirForShelfSubDir(subDirName);
     await Directory(destDir).create(recursive: true);
+    // create the shelf folder BEFORE copying so each imported record is
+    // born grouped; late webview metadata callbacks can no longer race
+    // the post-import grouping and reset it
+    final groupId = await ensureShelfFolder(subDirName);
     AnxLog.info(
-        'SAF import: folder "${listing.rootName}" -> dir "$subDirName", ${listing.files.length} files');
+        'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
     var imported = 0;
     var failed = 0;
@@ -271,6 +275,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
             ref,
             precomputedMd5: copied.md5,
             storageSubDir: subDir,
+            groupId: groupId,
           );
           importedMd5s.add(copied.md5);
           imported++;
@@ -1011,6 +1016,37 @@ class _StatusChip extends StatelessWidget {
 }
 
 
+/// Find or create the shelf folder [groupName] and return its id. Called
+/// BEFORE a folder import so every imported book record is born with its
+/// group membership — no post-hoc md5 lookup that a slow metadata callback
+/// could race and reset.
+Future<int?> ensureShelfFolder(String groupName) async {
+  if (groupName.isEmpty) return null;
+  try {
+    final db = await DBHelper().database;
+    final existing = await db.query('tb_groups',
+        where: 'name = ? AND is_deleted = 0',
+        whereArgs: [groupName],
+        limit: 1);
+    if (existing.isNotEmpty) {
+      return existing.first['id'] as int;
+    }
+    final now = DateTime.now().toIso8601String();
+    final id = await db.insert('tb_groups', {
+      'name': groupName,
+      'parent_id': 0,
+      'is_deleted': 0,
+      'create_time': now,
+      'update_time': now,
+    });
+    AnxLog.info('SAF import: created folder "$groupName" (id $id)');
+    return id;
+  } catch (e) {
+    AnxLog.severe('SAF import: ensure folder failed: $e');
+    return null;
+  }
+}
+
 /// Put a batch of imported books into a shelf folder named after the
 /// source folder; the folder is created when missing. Group ids follow
 /// the app convention of reusing a member book's id.
@@ -1120,8 +1156,11 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   final subDir = shelfSubDir(subDirName);
   final destDir = destDirForShelfSubDir(subDirName);
   await Directory(destDir).create(recursive: true);
+  // pre-create the shelf folder so records are born grouped (see the
+  // manual import path)
+  final groupId = await ensureShelfFolder(subDirName);
   AnxLog.info(
-      'SAF import: folder "${listing.rootName}" -> dir "$subDirName", ${listing.files.length} files');
+      'SAF import: folder "${listing.rootName}" -> dir "$subDirName" (group $groupId), ${listing.files.length} files');
 
   var imported = 0;
   final importedMd5s = <String>[];
@@ -1133,6 +1172,7 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
         ref,
         precomputedMd5: copied.md5,
         storageSubDir: subDir,
+        groupId: groupId,
       );
       importedMd5s.add(copied.md5);
       imported++;

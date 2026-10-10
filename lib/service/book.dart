@@ -435,7 +435,7 @@ void _showImportDialog(
 }
 
 Future<void> importBook(File file, WidgetRef ref,
-    {String? precomputedMd5, String? storageSubDir}) async {
+    {String? precomputedMd5, String? storageSubDir, int? groupId}) async {
   // keep the original file name for converted/templated outputs so no
   // numeric suffix sneaks into the stored file name
   final preferredName = path.basenameWithoutExtension(file.path);
@@ -458,7 +458,11 @@ Future<void> importBook(File file, WidgetRef ref,
   }
 
   await getBookMetadata(file,
-      md5: md5, ref: ref, storageSubDir: storageSubDir, preferredName: preferredName);
+      md5: md5,
+      ref: ref,
+      storageSubDir: storageSubDir,
+      preferredName: preferredName,
+      groupId: groupId);
   ref.read(bookListProvider.notifier).refresh();
 }
 
@@ -557,6 +561,7 @@ Future<void> saveBook(
   Book? provideBook,
   String? storageSubDir,
   String? preferredName,
+  int? groupId,
 }) async {
   // Extract original filename (without extension)
   final fileNameWithoutExt = path.basenameWithoutExtension(file.path);
@@ -627,7 +632,11 @@ Future<void> saveBook(
   }
 
   Book book = Book(
-      id: provideBook != null ? provideBook.id : -1,
+    id: provideBook != null ? provideBook.id : -1,
+    // group membership is precious: an explicit import assignment wins,
+    // otherwise an updating record keeps the folder it already belongs to
+    // (a re-import save must never reset a book back to the shelf root)
+    groupId: groupId ?? provideBook?.groupId ?? 0,
       // refresh titles that were derived from old timestamped file names
       // (pre-1.15.9 imports stored "title-1730000000000"); a 13-digit run
       // in the title marks those records so re-imports heal them
@@ -693,6 +702,7 @@ Future<void> getBookMetadata(
   WidgetRef? ref,
   String? storageSubDir,
   String? preferredName,
+  int? groupId,
 }) async {
   String serverFileName = Server().setTempFile(file);
 
@@ -738,6 +748,7 @@ Future<void> getBookMetadata(
               provideBook: book,
               storageSubDir: storageSubDir,
               preferredName: preferredName,
+              groupId: groupId,
             );
             ref?.read(bookListProvider.notifier).refresh();
           });
