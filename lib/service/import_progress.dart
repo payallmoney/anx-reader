@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Global state of a running folder import, exposed as a stream so a small
 /// floating progress bar (and the shelf) can follow along without any
@@ -68,6 +69,15 @@ class ImportProgressService {
   Future<void> _notifyService(String method,
       {String? name, int? imported, int? total}) async {
     if (!Platform.isAndroid) return;
+    // Android 13+: without POST_NOTIFICATIONS the system hides the progress
+    // notification entirely — ask once when an import actually starts
+    if (method == 'start') {
+      // await the dialog: a permission granted AFTER startForeground does
+      // not retroactively reveal this import's notification
+      try {
+        await Permission.notification.request();
+      } catch (_) {}
+    }
     try {
       await _serviceChannel.invokeMethod(method, {
         if (name != null) 'name': name,
@@ -89,7 +99,7 @@ class ImportProgressService {
         p == ImportPhase.paused;
   }
 
-  void start(String folderName, int total) {
+  Future<void> start(String folderName, int total) async {
     _cancelRequested = false;
     _pauseGate = null;
     _lastNotify = DateTime.now();
@@ -98,7 +108,9 @@ class ImportProgressService {
       folderName: folderName,
       total: total,
     );
-    _notifyService('start', name: folderName, total: total);
+    // the service starts only after the notification-permission dialog is
+    // answered, so the very first import's progress notification is visible
+    await _notifyService('start', name: folderName, total: total);
   }
 
   void update({

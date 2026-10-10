@@ -1069,7 +1069,7 @@ Future<void> resumeImportTask({
   // backfilled after the loop
   final coverBacklog = <(String, String)>[];
   final progress = ImportProgressService.instance;
-  progress.start(task.subDirName, task.fileNames.length);
+  await progress.start(task.subDirName, task.fileNames.length);
   progress.update(phase: ImportPhase.importing, copied: processed);
 
   // Single-pass pipeline: each book completes copy -> import -> checkpoint
@@ -1324,7 +1324,7 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   var failed = 0;
   final importedMd5s = <String>[];
   final progress = ImportProgressService.instance;
-  progress.start(subDirName, listing.files.length);
+  await progress.start(subDirName, listing.files.length);
   progress.update(phase: ImportPhase.importing);
   for (final entry in listing.files) {
     if (!await progress.checkpoint()) break;

@@ -1,3 +1,8 @@
+## 1.15.61
+- Fix(import): The persistent progress notification was invisible on Android 13+ — the POST_NOTIFICATIONS runtime permission was never requested, so the system hid the foreground-service notification entirely. Starting an import now asks for the permission first (dialog appears once) and only then starts the service, so the notification shows from the very first book
+
+- Fix(导入): 常驻进度通知在 Android 13+ 上不可见——此前从未请求 POST_NOTIFICATIONS 运行时权限,系统会直接隐藏前台服务通知;现在开始导入会先弹出权限询问,确认后才启动服务,第一条进度通知即可见
+
 ## 1.15.60
 - Feat(bookshelf): The "New folder" chip in the folder dialog is now an icon-only chip (folder+ icon, tooltip kept), and the title-bar action icons (edit / dissolve / delete) are evenly spaced — the rename hint pencil stays attached to the folder name it belongs to
 
