@@ -278,9 +278,31 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                   _folderActionIcon(
                     tooltip: L10n.of(context).commonDissolve,
                     icon: Icons.call_split,
-                    onTap: () {
+                    onTap: () async {
+                      final l10n = L10n.of(context);
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: Text(l10n.commonDissolve),
+                          content: Text(l10n.bookshelfDissolveFolderConfirm(
+                              currentGroupName, books.length)),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: Text(l10n.commonCancel),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: Text(l10n.commonConfirm),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !mounted) return;
                       ref.read(bookListProvider.notifier).dissolveGroup(books);
-                      Navigator.pop(context);
+                      if (mounted) Navigator.pop(context);
                     },
                   ),
                   _folderActionIcon(

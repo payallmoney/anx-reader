@@ -1,3 +1,8 @@
+## 1.15.58
+- Feat(bookshelf): Dissolving a folder now asks for confirmation first — same style as the delete-folder dialog (folder name, book count, files-never-deleted note); accidental taps on the dissolve icon no longer instantly scatter the folder
+
+- Feat(书架): 解散文件夹现在先弹确认——与删除文件夹相同的确认样式(文件夹名、书数量、文件不删除说明);误触解散图标不会再瞬间打散整个文件夹
+
 ## 1.15.57
 - Perf(import): Scheduler-level CPU split — the extraction isolate and the MD5 thread run at background scheduling priority (nice +10 via FFI), and the native SAF copy/MD5 channel moved off the Android main thread onto a background task queue at background priority. The UI threads always win core contention now; imports only consume leftover capacity. Verified mid-import: two tab switches completed in 185ms with the shelf rendering normally
 - Perf(导入): 调度器级 CPU 分配——元数据提取 isolate 与 MD5 线程以后台优先级运行(FFI 设 nice +10),原生的 SAF 复制/MD5 通道也从 Android 主线程挪到后台任务队列并以后台优先级执行。UI 线程在核心竞争时永远优先,导入只消耗剩余算力。实测导入中两次 tab 切换仅 185ms,书架渲染正常

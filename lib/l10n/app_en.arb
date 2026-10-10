@@ -1028,5 +1028,12 @@
       "done": {},
       "total": {}
     }
+  },
+  "bookshelfDissolveFolderConfirm": "Dissolve folder \"{name}\"? Its {count} books return to the shelf; book files are never deleted. Subfolders are removed as well.",
+  "@bookshelfDissolveFolderConfirm": {
+    "placeholders": {
+      "name": {},
+      "count": {}
+    }
   }
 }

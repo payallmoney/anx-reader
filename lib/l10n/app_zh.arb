@@ -1028,5 +1028,12 @@
       "done": {},
       "total": {}
     }
+  },
+  "bookshelfDissolveFolderConfirm": "解散文件夹\"{name}\"?其中 {count} 本书将移回书架(书籍文件不会被删除),子文件夹也会一并移除。",
+  "@bookshelfDissolveFolderConfirm": {
+    "placeholders": {
+      "name": {},
+      "count": {}
+    }
   }
 }
