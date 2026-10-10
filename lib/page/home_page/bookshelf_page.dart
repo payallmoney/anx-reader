@@ -1058,8 +1058,10 @@ Future<void> resumeImportTask({
       .toList();
 
   var copiedCount = task.doneNames.length;
-  var imported = 0;
-  var failed = 0;
+  // seed counters from the persisted task so a RESUMED import shows the
+  // true position ("Importing books 45/60") instead of restarting at 1
+  var imported = task.doneNames.length;
+  var failed = task.failedNames.length;
   final importedMd5s = <String>[];
   final progress = ImportProgressService.instance;
   progress.start(task.subDirName, task.fileNames.length);
@@ -1091,7 +1093,7 @@ Future<void> resumeImportTask({
   var cancelled = copyCancelled;
   try {
     if (progress.state.value.phase != ImportPhase.paused) {
-      progress.update(phase: ImportPhase.importing, imported: 0);
+      progress.update(phase: ImportPhase.importing, imported: imported);
     }
     for (final copied in copiedEntries) {
       if (!await progress.checkpoint()) {

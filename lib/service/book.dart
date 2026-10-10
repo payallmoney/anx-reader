@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/dao/theme.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
@@ -18,6 +21,7 @@ import 'package:anx_reader/providers/iap.dart';
 import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/providers/toc_search.dart';
 import 'package:anx_reader/service/convert_to_epub/txt/convert_from_txt.dart';
+import 'package:anx_reader/service/epub_metadata_dart.dart';
 import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/utils/webView/anx_headless_webview.dart';
@@ -735,9 +739,46 @@ Future<void> _getBookMetadataLocked(
   String? preferredName,
   int? groupId,
 }) async {
-  // reading comfort first: while a book is open, its webview owns the
-  // main thread — park metadata extraction until the reader is closed
-  // (bounded, so a forgotten open reader cannot stall an import forever)
+  // PRIMARY path: pure-Dart extraction inside an isolate. No webview, no
+  // main-thread contention — imports keep flowing while the user reads,
+  // which is exactly the "import on a separate thread" behaviour.
+  if (file.path.split('.').last.toLowerCase() == 'epub') {
+    try {
+      final p = file.path;
+      // compute() passes a top-level function reference + message across
+      // isolates (an Isolate.run closure here captured the enclosing widget
+      // state and failed as unsendable)
+      final meta = await compute(extractEpubMetadataDart, p);
+      if (meta != null) {
+        final title = meta['title'] ?? 'Unknown';
+        final author = meta['author'] ?? 'Unknown';
+        await saveBook(
+          file,
+          title,
+          author,
+          meta['description'] ?? '',
+          md5,
+          meta['cover'] ?? '',
+          provideBook: book,
+          storageSubDir: storageSubDir,
+          preferredName: preferredName,
+          groupId: groupId,
+        );
+        ref?.read(bookListProvider.notifier).refresh();
+        return;
+      }
+      AnxLog.warning(
+          'Import: dart metadata null for ${file.path.split('/').last}, falling back to webview');
+    } catch (e) {
+      AnxLog.severe(
+          'Import: dart metadata failed (${file.path.split('/').last}): $e');
+    }
+  }
+
+  // FALLBACK path (non-epub or unparseable epub): the headless webview
+  // competes with the reader for the main thread, so while a book is open
+  // park extraction until the reader is closed (bounded, so a forgotten
+  // open reader cannot stall an import forever)
   await ImportReadingGate.waitWhileReading();
 
   String serverFileName = Server().setTempFile(file);

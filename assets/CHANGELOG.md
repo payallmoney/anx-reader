@@ -1,3 +1,9 @@
+## 1.15.43
+- Feat(import)!: Imports now continue while you read — epub metadata (title/author/cover) is extracted in a background isolate in pure Dart (no webview, no main-thread contention), making imports ~15× faster (~0.2s per book vs ~2.5s) AND removing the need to pause during reading; the headless-webview path remains only as fallback for non-epub/unparseable files, and it still defers to the reader
+- Fix(import): A resumed import's progress pill now shows the true position (continues at e.g. 45/60) instead of restarting from 1
+- Fix(导入)!: 看书时导入继续进行——epub 元数据(标题/作者/封面)改为纯 Dart 后台 isolate 提取(无 WebView、不抢主线程),导入提速约 15 倍(每本约 0.2 秒)且看书时无需暂停;无头 WebView 仅保留为非 epub/解析失败时的兜底,且仍为阅读让路
+- Fix(导入): 续传时进度条显示真实位置(如从 45/60 继续),不再从 1 重新计数
+
 ## 1.15.41
 - Feat(reading)!: Reading no longer stutters during folder imports — the reader announces its lifecycle to the import system, which parks metadata extraction while a book is open and resumes when you leave; the progress pill also hides inside the reader, and shelf refreshes are suppressed during reading
 - Feat(阅读)!: 导入文件夹时看书不再卡顿——阅读页把自己的生命周期告知导入系统:看书期间元数据提取自动暂停,退出书后无缝继续;阅读页内不再显示进度悬浮条,阅读期间书架刷新也被抑制
