@@ -1,3 +1,8 @@
+## 1.15.50
+- Feat(import): The shelf shows the new folder as soon as its first book lands (one early refresh), and stays untouched until the whole import finishes (final refresh) — nothing in between
+
+- Feat(导入): 文件夹里第一本书落库后立即刷新一次(书架马上能看到新文件夹),此后直到导入全部完成期间书架保持静止(仅结束时最终刷新),中间不再有任何刷新
+
 ## 1.15.48 / 1.15.49
 - Perf(import)!: Folder imports no longer compete with the UI for the main thread — each imported book used to trigger a full shelf rebuild (query + pinyin sort + grid rebuild with animations), which on a 630-book library froze every animation and broke open dialogs (cells floating above the dialog scrim); the shelf now stays completely untouched during the import and is rebuilt once at the end, and the import loop yields the main thread 15ms between books
 - Perf(导入)!: 文件夹导入不再与界面抢主线程——此前每导入一本就全量重建书架(查询+拼音排序+网格动画重建),630 本的库会让所有动画冻住、打开的弹窗出现格子浮层的错乱;现在导入期间书架完全静止,结束时一次性重建,并且每本之间主动让出主线程 15 毫秒

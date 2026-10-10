@@ -1106,6 +1106,16 @@ Future<void> resumeImportTask({
         processed++;
         task.doneNames.add(entry.name);
         progress.update(imported: processed, failed: failed);
+        // ONE early refresh, right after the folder exists with its first
+        // book, so the user sees the folder on the shelf immediately; every
+        // other refresh waits for the import to finish (a mid-import
+        // refresh is a full query + pinyin sort + grid rebuild that starves
+        // the UI on large libraries)
+        if (processed == 1) {
+          try {
+            ref.read(bookListProvider.notifier).refresh();
+          } catch (_) {}
+        }
         // persist resume state every few books (cheap JSON write)
         if (processed % 3 == 0) {
           await PendingImport.save(task);
@@ -1113,10 +1123,6 @@ Future<void> resumeImportTask({
         // yield the main thread between books: with hundreds of books the
         // import loop would otherwise saturate the UI (animations freeze)
         await Future<void>.delayed(const Duration(milliseconds: 15));
-        // NO periodic shelf refresh during the import: every refresh is a
-        // full query + pinyin sort + grid rebuild, which on large libraries
-        // starves the UI and breaks open dialogs (books floating above the
-        // dialog scrim). The shelf is refreshed once at the end.
       } catch (e) {
         failed++;
         task.failedNames.add(entry.name);
@@ -1302,6 +1308,13 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       importedMd5s.add(copied.md5);
       imported++;
       task.doneNames.add(entry.name);
+      // ONE early refresh after the folder exists with its first book;
+      // everything else waits for the import to finish
+      if (imported == 1) {
+        try {
+          ref.read(bookListProvider.notifier).refresh();
+        } catch (_) {}
+      }
       if (imported % 3 == 0) {
         await PendingImport.save(task);
       }
