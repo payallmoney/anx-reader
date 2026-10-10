@@ -1,3 +1,12 @@
+## 1.15.53
+- Feat(import): The progress pill is visible on the reader page again — imports visibly continue while you read
+- Perf(import): More CPU left for the UI — cover base64 decoding moved off the main thread (multi-MB strings decoded in an isolate), and the pause between books doubled to 40ms; the ANR "no response" popups during large imports came from per-book work hogging the main thread and are addressed by these two
+- Fix(import): Removed the per-book "import success" toasts (single-file imports and batch imports alike) — only one notice when everything is done
+
+- Feat(导入): 阅读页重新显示导入进度条——看书时能直接看到导入进展
+- Perf(导入): 为界面留出更多 CPU——封面 base64 解码(数 MB 字符串)移入 isolate,书本间隔让出时间加倍至 40 毫秒;大库导入时的"失去响应"弹窗正来自这些逐本主线程操作
+- Fix(导入): 移除逐本的"导入成功"提示(单本与批量 alike)——只有全部导入完成才提示一次
+
 ## 1.15.52
 - Feat(bookshelf): Folder dialog actions are icons in the top-right corner — edit toggle, dissolve and delete-folder moved from the bottom text row into the title bar; the rename hint pencil is now a distinct icon
 

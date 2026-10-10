@@ -397,7 +397,6 @@ void _showImportDialog(
                       }
 
                       for (var file in filesToImport) {
-                        AnxToast.show(path.basename(file.path));
                         setState(() {
                           currentHandlingFile = file.path;
                         });
@@ -704,7 +703,8 @@ Future<void> saveBook(
     }
   }
 
-  AnxToast.show(L10n.of(navigatorKey.currentContext!).serviceImportSuccess);
+  // no per-book toast: batch imports popped hundreds of "import success"
+  // messages; the import pipeline reports once when everything is done
   await headlessInAppWebView?.dispose();
   headlessInAppWebView = null;
   return;

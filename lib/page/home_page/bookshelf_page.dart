@@ -1122,7 +1122,7 @@ Future<void> resumeImportTask({
         }
         // yield the main thread between books: with hundreds of books the
         // import loop would otherwise saturate the UI (animations freeze)
-        await Future<void>.delayed(const Duration(milliseconds: 15));
+        await Future<void>.delayed(const Duration(milliseconds: 40));
       } catch (e) {
         failed++;
         task.failedNames.add(entry.name);
@@ -1320,7 +1320,7 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       }
       progress.update(imported: imported, failed: failed);
       // yield the main thread between books so UI animations keep running
-      await Future<void>.delayed(const Duration(milliseconds: 15));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
     } catch (e) {
       failed++;
       task.failedNames.add(entry.name);

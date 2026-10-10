@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
@@ -17,7 +18,10 @@ Future<String> saveImageToLocal(String? imageFile, String name) async {
     // data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD//gA8Q1JFQVRPUjogZ2...
     final List<String> parts = imageFile.split(',');
     final String base64String = parts[1];
-    final Uint8List pngBytes = base64.decode(base64String);
+    // multi-MB base64 strings take tens of ms to decode — keep that CPU
+    // off the main thread (covers of a 630-book import otherwise freeze
+    // every animation)
+    final Uint8List pngBytes = await Isolate.run(() => base64Decode(base64String));
     final extension = parts[0].split('/')[1].split(';')[0];
 
     name = '$name.$extension';
