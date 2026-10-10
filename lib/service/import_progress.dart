@@ -60,6 +60,7 @@ class ImportProgressService {
   /// Set between items of the import loop; paused keeps the loop waiting.
   Completer<void>? _pauseGate;
   bool _cancelRequested = false;
+  DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get isActive {
     final p = state.value.phase;
@@ -71,6 +72,7 @@ class ImportProgressService {
   void start(String folderName, int total) {
     _cancelRequested = false;
     _pauseGate = null;
+    _lastNotify = DateTime.now();
     state.value = ImportProgress(
       phase: ImportPhase.copying,
       folderName: folderName,
@@ -85,6 +87,18 @@ class ImportProgressService {
     int? failed,
     String? message,
   }) {
+    // throttle notifications: per-book updates at import speed flooded the
+    // UI thread on real devices (pill rebuild + listeners each tick)
+    final now = DateTime.now();
+    final isTerminal = phase == ImportPhase.done ||
+        phase == ImportPhase.failed ||
+        phase == ImportPhase.paused;
+    if (!isTerminal &&
+        now.difference(_lastNotify).inMilliseconds < 300 &&
+        phase == null) {
+      return;
+    }
+    _lastNotify = now;
     state.value = state.value.copyWith(
       phase: phase,
       copied: copied,

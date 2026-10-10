@@ -1,3 +1,7 @@
+## 1.15.37
+- Fix(import): Imports no longer freeze the app — the parallel file copy saturated IO threads on real devices (slower than serial, not faster) and the per-book shelf refresh rebuilt the whole grid every few books; copying is sequential again, shelf refreshes are debounced to at most one per 5 seconds, and the progress pill throttles its updates (300ms) behind a repaint boundary
+- Fix(导入): 导入不再卡死应用——并行文件复制在真机上反而拖慢 IO(串行更快),且逐本刷新书架每几本就重建整个网格;已改回串行复制,书架刷新去抖为至多每 5 秒一次,进度胶囊更新节流(300 毫秒)并加重绘隔离
+
 ## 1.15.36
 - Feat(bookshelf)!: Long-press any shelf cell to enter multi-select with it pre-selected — the previous behaviour (long-press started a drag that showed a book sheet and looked like "dragging, not selecting") is gone: drag-to-reorder was a no-op anyway and its gesture shadowed multi-select; taps still open books/folders, and the top-bar multi-select button still works
 

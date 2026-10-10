@@ -274,37 +274,37 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     final progress = ImportProgressService.instance;
     progress.start(subDirName, listing.files.length);
 
-    // Phase 1: copy every file into app storage first, a few in parallel.
-    // No webview work happens here, so the shelf list cannot refresh
-    // mid-import and show one folder cell per half-imported file.
+    // Phase 1: copy every file into app storage first — sequentially.
+    // Parallel SAF streaming saturated the IO threads on real devices and
+    // made imports slower than serial, while the UI updates starved the
+    // main thread (perceived as an app freeze).
     final copiedEntries = <SafCopyResult>[];
-    const copyParallelism = 3;
-    var copyIndex = 0;
-    Future<void> copyWorker() async {
-      while (true) {
-        final i = copyIndex++;
-        if (i >= listing.files.length) return;
-        if (!await progress.checkpoint()) return;
-        final entry = listing.files[i];
-        try {
-          final copied =
-              await SafTree.copyToDir(entry.uri, entry.name, destDir);
-          copiedEntries.add(copied);
-          copiedCount++;
-          progress.update(copied: copiedCount);
-        } catch (e) {
-          failed++;
-          AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
-        }
+    var copyCancelled = false;
+    for (final entry in listing.files) {
+      if (!await progress.checkpoint()) {
+        copyCancelled = true;
+        break;
+      }
+      try {
+        final copied =
+            await SafTree.copyToDir(entry.uri, entry.name, destDir);
+        copiedEntries.add(copied);
+        copiedCount++;
+        progress.update(copied: copiedCount);
+      } catch (e) {
+        failed++;
+        AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
       }
     }
 
     // Phase 2: import the staged copies one by one. Each record is born
     // with groupId; the floating pill shows live progress and supports
-    // pause/resume/cancel without blocking anything.
-    var cancelled = false;
+    // pause/resume/cancel without blocking anything. The shelf refresh is
+    // debounced — a refresh per book rebuilt the whole shelf grid on real
+    // devices and froze the UI.
+    var lastRefresh = DateTime.now();
+    var cancelled = copyCancelled;
     try {
-      await Future.wait(List.generate(copyParallelism, (_) => copyWorker()));
       if (progress.state.value.phase != ImportPhase.paused) {
         progress.update(phase: ImportPhase.importing, imported: 0);
       }
@@ -324,7 +324,10 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
           importedMd5s.add(copied.md5);
           imported++;
           progress.update(imported: imported, failed: failed);
-          if (imported % 3 == 0 || identical(copied, copiedEntries.last)) {
+          final now = DateTime.now();
+          if (identical(copied, copiedEntries.last) ||
+              now.difference(lastRefresh).inSeconds >= 5) {
+            lastRefresh = now;
             try {
               ref.read(bookListProvider.notifier).refresh();
             } catch (_) {}
