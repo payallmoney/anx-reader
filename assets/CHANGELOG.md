@@ -1,3 +1,10 @@
+## 1.15.45
+- Fix(tts): Screen-off narration no longer dies mid-chapter after a long while — two root causes: (1) the online-TTS buffer deduplicated fallback sentences by text hash, so repeated sentence patterns starved the buffer and narration silently stopped; fallback sentences now carry unique position cfis. (2) When the network drops during screen-off (WiFi doze), failed Azure segments were marked silent and the player burned through the chapter in milliseconds, ending narration; it now backs off and waits for the network instead. A playback watchdog unsticks a dead audio session after 60s
+- Feat(tts): Waking the screen now syncs the reader to the narrated position — the Dart fallback narrates without touching the frozen webview, so the visible page stayed on the chapter's first page; on resume the reader jumps to the narration position and paused narration resumes
+
+- Fix(朗读): 息屏朗读长时间后不再在章节中间停住——两个根因:(1) 在线 TTS 缓冲用文本哈希去重兜底句,重复句式会饿死缓冲导致朗读无声停止;现给兜底句分配唯一位置 cfi。(2) 息屏时网络断开(WiFi Doze),Azure 合成失败的段落被标为静音并被瞬间消费,几毫秒烧完整章后朗读结束;现在改为退避等待网络恢复。另加 60 秒播放看门狗解开死锁的音频会话
+- Feat(朗读): 亮屏后阅读页自动同步到朗读位置——Dart 兜底朗读时冻结的 WebView 不会动,屏幕点亮时页面还停在熄屏时的章节第一页;现在亮屏即跳转到朗读实际位置,暂停态自动恢复朗读
+
 ## 1.15.43
 - Feat(import)!: Imports now continue while you read — epub metadata (title/author/cover) is extracted in a background isolate in pure Dart (no webview, no main-thread contention), making imports ~15× faster (~0.2s per book vs ~2.5s) AND removing the need to pause during reading; the headless-webview path remains only as fallback for non-epub/unparseable files, and it still defers to the reader
 - Fix(import): A resumed import's progress pill now shows the true position (continues at e.g. 45/60) instead of restarting from 1

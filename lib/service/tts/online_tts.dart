@@ -188,6 +188,15 @@ class OnlineTts extends BaseTts {
 
     try {
       while (!_shouldStop) {
+        // network is down: back off instead of collecting new sentences
+        // (burning through the book as silent segments) — after the pause
+        // step the failure count down so one batch gets retried
+        if (_consecutiveFetchFailures >= 3) {
+          await Future.delayed(const Duration(seconds: 5));
+          _consecutiveFetchFailures--;
+          continue;
+        }
+
         // Check for segments that need audio re-fetch (after settings change)
         final segmentsNeedingAudio =
             _buffer.where((s) => !s.isReady && !s.isSilent).toList();
@@ -304,35 +313,47 @@ class OnlineTts extends BaseTts {
         // Check if version is still valid (settings haven't changed during fetch)
         if (segment.fetchVersion != targetVersion) {
           AnxLog.info(
-              'Audio fetch completed but version changed - discarding (segment version: ${segment.fetchVersion}, target: $targetVersion)');
+              'Audio fetch completed but version changed - discarding (segment version: ${segment.fetchVersion}, targetVersion: $targetVersion)');
           return;
         }
 
         if (bytes.isEmpty) {
-          segment.isSilent = true;
+          // genuinely silent sentence content — mark and let the player
+          // skip it; this is a content property, not a network failure
+          if (segment.fetchVersion == targetVersion) {
+            segment.isSilent = true;
+          }
         } else {
           segment.audio = bytes;
+          _consecutiveFetchFailures = 0;
         }
         return; // Success, exit retry loop
       } on TimeoutException {
         AnxLog.severe(
             'Fetch timeout (attempt ${attempt + 1}/$_maxRetries): "${segment.sentence.text.substring(0, segment.sentence.text.length.clamp(0, 20))}..."');
         if (attempt == _maxRetries) {
-          // Check version before marking as silent
-          if (segment.fetchVersion == targetVersion) {
-            segment.isSilent = true;
-          }
+          _registerFetchFailure(segment, targetVersion);
         }
       } catch (e) {
         AnxLog.severe('Fetch error (attempt ${attempt + 1}): $e');
         if (attempt == _maxRetries) {
-          // Check version before marking as silent
-          if (segment.fetchVersion == targetVersion) {
-            segment.isSilent = true;
-          }
+          _registerFetchFailure(segment, targetVersion);
         }
       }
     }
+  }
+
+  /// Consecutive segment batches that exhausted retries (network down —
+  /// e.g. WiFi doze during screen-off). Marking failed segments silent let
+  /// the player consume the whole chapter in milliseconds and narration
+  /// "stopped mid-chapter"; instead we keep the segment pending and back
+  /// off until the network returns.
+  int _consecutiveFetchFailures = 0;
+
+  void _registerFetchFailure(TtsSegment segment, int targetVersion) {
+    _consecutiveFetchFailures++;
+    AnxLog.severe(
+        'Fetch failed for good (${_consecutiveFetchFailures} consecutive) — segment stays pending for retry');
   }
 
   // ============ Consumer: Player Loop ============
@@ -342,6 +363,7 @@ class OnlineTts extends BaseTts {
     _playerCompleter = Completer<void>();
 
     final audioPlayer = await _ensurePlayer();
+    _startPlaybackWatchdog();
 
     try {
       while (!_shouldStop) {
@@ -364,14 +386,20 @@ class OnlineTts extends BaseTts {
         _buffer.removeAt(0);
         _currentSegment = segment;
         _currentVoiceText = segment.sentence.text;
+        _petPlaybackWatchdog();
 
         // Highlight current sentence
         await _highlightSegment(segment);
 
-        // Handle silent segment
+        // Handle silent segment (fetch failed / empty audio): skip it but
+        // keep narrating — a dead network must not end the session
         if (segment.isSilent) {
           await Future.delayed(const Duration(milliseconds: 100));
-          await getNextTextFunction();
+          try {
+            await getNextTextFunction();
+          } catch (e) {
+            AnxLog.severe('Advance after silent segment failed: $e');
+          }
           _currentSegment = null;
           continue;
         }
@@ -389,10 +417,17 @@ class OnlineTts extends BaseTts {
 
         _playbackCompleter = null;
         _currentSegment = null;
+        _petPlaybackWatchdog();
 
         // Advance reader position
         if (!_shouldStop) {
-          await getNextTextFunction();
+          try {
+            await getNextTextFunction();
+          } catch (e) {
+            // an advance failure must not kill the loop — the prefetcher
+            // will re-collect from the current cursor position
+            AnxLog.severe('Advance error: $e');
+          }
         }
       }
     } catch (e) {
@@ -401,13 +436,50 @@ class OnlineTts extends BaseTts {
       _isPlayerRunning = false;
       _playerCompleter?.complete();
       _playerCompleter = null;
+      _stopPlaybackWatchdog();
     }
+  }
+
+  // ---- playback stall watchdog ----
+  // The system-TTS chain has one; online playback needs the same last line
+  // of defence: if "playing" but neither playback completions nor buffer
+  // movement happened for 60s (stuck await, dead audio session), unstick
+  // by completing the pending playback so the loop advances.
+  Timer? _playbackWatchdog;
+  DateTime _lastPlaybackActivity = DateTime.now();
+
+  void _petPlaybackWatchdog() {
+    _lastPlaybackActivity = DateTime.now();
+  }
+
+  void _startPlaybackWatchdog() {
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_shouldStop) return;
+      final idle = DateTime.now().difference(_lastPlaybackActivity).inSeconds;
+      if (idle < 60) return;
+      AnxLog.severe('Online TTS watchdog: no playback progress for ${idle}s, unsticking');
+      _petPlaybackWatchdog();
+      _playbackCompleter?.complete();
+      _playbackCompleter = null;
+      // buffer starvation: prefetcher re-collects on its own loop; nothing
+      // else needed here — the player loop resumes and waits for buffer
+    });
+  }
+
+  void _stopPlaybackWatchdog() {
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = null;
   }
 
   Future<void> _highlightSegment(TtsSegment segment) async {
     final state = epubPlayerKey.currentState;
     final cfi = segment.sentence.cfi;
-    if (state == null || cfi == null || cfi.isEmpty) return;
+    // synthetic fallback cfis ("dart-tts://...") identify positions in the
+    // Dart sentence list — navigating the real reader to them is invalid
+    if (state == null || cfi == null || cfi.isEmpty || cfi.startsWith('dart-tts://')) {
+      return;
+    }
     try {
       await state.ttsHighlightByCfi(cfi);
     } catch (_) {}

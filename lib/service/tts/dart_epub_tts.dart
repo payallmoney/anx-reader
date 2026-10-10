@@ -190,14 +190,27 @@ class DartEpubTts {
     return s;
   }
 
+  /// Narration position as a fraction of the whole book — used to sync the
+  /// reader UI back to the spoken position when the screen wakes (the
+  /// fallback narrates without touching the frozen webview, so the visible
+  /// page would otherwise stay where the screen turned off).
+  double get positionFraction =>
+      _sentences.isEmpty ? 0 : (_index / _sentences.length).clamp(0.0, 1.0);
+
   /// Peek at upcoming sentences without advancing the cursor; used by the
-  /// online-TTS prefetcher when the WebView is frozen. Plain text only —
-  /// no cfi, so highlighting is skipped for these sentences.
+  /// online-TTS prefetcher when the WebView is frozen. Each sentence gets a
+  /// synthetic cfi carrying its absolute index — the online pipeline's
+  /// dedup keys on cfi, and a text-hash key collided on repeated sentences,
+  /// starving the buffer (narration died mid-chapter). Highlighting skips
+  /// these synthetic cfis.
   List<Map<dynamic, dynamic>> peekList(int count, {int offset = 0}) {
     final out = <Map<dynamic, dynamic>>[];
     final start = _index + offset;
     for (var i = start; i < start + count && i < _sentences.length; i++) {
-      out.add(<dynamic, dynamic>{'text': _sentences[i]});
+      out.add(<dynamic, dynamic>{
+        'text': _sentences[i],
+        'cfi': 'dart-tts://$_cachedBookPath#$i',
+      });
     }
     return out;
   }

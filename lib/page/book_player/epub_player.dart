@@ -82,7 +82,7 @@ class EpubPlayer extends ConsumerStatefulWidget {
 }
 
 class EpubPlayerState extends ConsumerState<EpubPlayer>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late EpubWebViewController webViewController;
   late ContextMenu contextMenu;
   String cfi = '';
@@ -1074,6 +1074,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     // pauses while this page lives (import webviews otherwise compete for
     // the main thread and make reading stutter)
     ImportReadingGate.reading = true;
+    WidgetsBinding.instance.addObserver(this);
     getThemeColor();
 
     contextMenu = ContextMenu(
@@ -1116,8 +1117,43 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _syncReaderToNarration();
+    }
+  }
+
+  /// Screen woke up after a screen-off narration session: the Dart
+  /// fallback narrated without touching the frozen webview, so the visible
+  /// page is wherever the screen turned off. Jump the reader to the
+  /// narration position and, if narration should be running but the chain
+  /// died, restart it.
+  Future<void> _syncReaderToNarration() async {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
+    try {
+      final fraction = fallback.positionFraction;
+      if (fraction > 0 && (fraction - percentage).abs() > 0.001) {
+        AnxLog.info(
+            'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
+        await goToPercentage(fraction);
+      }
+      final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;
+      if (!playing &&
+          TtsHandler().ttsStateNotifier.value == TtsStateEnum.paused) {
+        AnxLog.info('Screen-on: TTS paused, resuming narration');
+        await TtsHandler().play();
+      }
+    } catch (e) {
+      AnxLog.severe('Screen-on narration sync failed: $e');
+    }
+  }
+
+  @override
   void dispose() {
     ImportReadingGate.reading = false;
+    WidgetsBinding.instance.removeObserver(this);
     _scrollDebounceTimer?.cancel();
     _animationController?.dispose();
     saveReadingProgress();
