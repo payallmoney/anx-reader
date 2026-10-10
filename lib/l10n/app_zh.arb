@@ -990,4 +990,6 @@
   "importDoneMsg": "导入完成,共 {done} 本",
   "bookshelfDeleteFolder": "删除文件夹",
   "bookshelfDeleteFolderConfirm": "删除文件夹\"{name}\"?其中 {count} 本书将移回书架(书籍文件不会被删除),子文件夹也会一并移除。"
+,
+  "importResumeAsk": "上次导入\"{name}\"被中断,还剩 {count} 个文件未导入。现在继续吗?"
 }

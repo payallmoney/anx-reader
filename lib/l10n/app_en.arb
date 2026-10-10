@@ -990,4 +990,6 @@
   "importDoneMsg": "Import finished: {done} books",
   "bookshelfDeleteFolder": "Delete folder",
   "bookshelfDeleteFolderConfirm": "Delete folder \"{name}\"? Its {count} books return to the shelf; book files are never deleted. Subfolders are removed as well."
+,
+  "importResumeAsk": "An import of \"{name}\" was interrupted with {count} files remaining. Continue now?"
 }

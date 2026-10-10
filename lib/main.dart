@@ -139,21 +139,60 @@ class _MyAppState extends ConsumerState<MyApp>
         if (!mounted) return;
         ref.invalidate(bookListProvider);
       });
-      // resume a folder import that an app restart interrupted: the
-      // floating pill reappears and the remaining files continue
+      // a folder import interrupted by an app restart: ask the user
+      // whether to continue it — resuming is opt-in
       try {
         final pending = await PendingImport.load();
-        if (pending != null && pending.remaining > 0) {
-          AnxLog.info(
-              'Resuming folder import "${pending.subDirName}": ${pending.remaining} files left');
-          await resumeImportTask(task: pending, ref: ref);
-        } else if (pending != null) {
+        if (pending == null) return;
+        if (pending.remaining <= 0) {
           await PendingImport.clear();
+          return;
         }
+        await _askResumeImport(pending);
       } catch (e) {
         AnxLog.severe('Pending import resume failed: $e');
       }
     });
+  }
+
+  /// Show the continue/cancel dialog for an interrupted import. Keep the
+  /// pending record when the user declines (they can still continue by
+  /// re-importing the same folder, which dedupes by md5).
+  Future<void> _askResumeImport(PendingImport pending) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      AnxLog.info('Import resume: no context yet, keeping task for next launch');
+      return;
+    }
+    final l10n = L10n.of(context);
+    final resume = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(pending.subDirName),
+        content: Text(l10n.importResumeAsk(
+            pending.subDirName, pending.remaining)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.commonResume),
+          ),
+        ],
+      ),
+    );
+    if (resume != true) {
+      AnxLog.info(
+          'Import resume: declined by user, "${pending.subDirName}" dropped (${pending.remaining} files were left)');
+      await PendingImport.clear();
+      return;
+    }
+    AnxLog.info(
+        'Resuming folder import "${pending.subDirName}": ${pending.remaining} files left');
+    await resumeImportTask(task: pending, ref: ref);
   }
 
   Timer? _autoTestTimer;

@@ -1,3 +1,8 @@
+## 1.15.46
+- Feat(import): Resuming an interrupted import now asks first — on the next launch a dialog names the interrupted folder and the remaining file count; Continue resumes from the exact breakpoint, Cancel drops the task (already-imported books stay; re-importing the folder later picks up the rest)
+
+- Feat(导入): 恢复被中断的导入前先询问用户——启动时弹窗显示被中断的文件夹名和剩余文件数;"继续"从精确断点续导,"取消"丢弃任务(已导入的书保留,之后重新导入同一文件夹可续齐)
+
 ## 1.15.45
 - Fix(tts): Screen-off narration no longer dies mid-chapter after a long while — two root causes: (1) the online-TTS buffer deduplicated fallback sentences by text hash, so repeated sentence patterns starved the buffer and narration silently stopped; fallback sentences now carry unique position cfis. (2) When the network drops during screen-off (WiFi doze), failed Azure segments were marked silent and the player burned through the chapter in milliseconds, ending narration; it now backs off and waits for the network instead. A playback watchdog unsticks a dead audio session after 60s
 - Feat(tts): Waking the screen now syncs the reader to the narrated position — the Dart fallback narrates without touching the frozen webview, so the visible page stayed on the chapter's first page; on resume the reader jumps to the narration position and paused narration resumes

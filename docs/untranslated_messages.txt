@@ -81,7 +81,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "de": [
@@ -166,7 +167,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "es": [
@@ -251,7 +253,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "fr": [
@@ -336,7 +339,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "it": [
@@ -421,7 +425,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "ja": [
@@ -506,7 +511,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "ko": [
@@ -591,7 +597,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "pt": [
@@ -676,7 +683,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "ro": [
@@ -761,7 +769,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "ru": [
@@ -846,7 +855,8 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ],
 
   "tr": [
@@ -931,6 +941,7 @@
     "importCancelled",
     "importDoneMsg",
     "bookshelfDeleteFolder",
-    "bookshelfDeleteFolderConfirm"
+    "bookshelfDeleteFolderConfirm",
+    "importResumeAsk"
   ]
 }
