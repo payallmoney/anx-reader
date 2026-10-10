@@ -1,3 +1,8 @@
+## 1.15.52
+- Feat(bookshelf): Folder dialog actions are icons in the top-right corner — edit toggle, dissolve and delete-folder moved from the bottom text row into the title bar; the rename hint pencil is now a distinct icon
+
+- Feat(书架): 文件夹弹窗的操作按钮改为右上角图标——编辑切换、解散、删除文件夹从底部文字行移入标题栏;重命名提示铅笔换为独立图标以示区分
+
 ## 1.15.51
 - Feat(webdav): Downloads from the WebDAV browser now land in the library automatically — after downloading, each book is imported in place (no re-copy) and shelf folders are created per remote subfolder, mirroring folder imports; plain files under the sync root group under "WebDAV". Download-only: no sync state is touched, nothing is uploaded
 - Feat(webdav): WebDAV 浏览器的下载现在自动入书库——下载完成后每本书原位导入(不重复复制),并按远端子目录创建书架分组(与文件夹导入一致);同步根目录下的散文件归入 "WebDAV" 根分组。纯下载行为:不触碰任何同步状态,绝不上传
