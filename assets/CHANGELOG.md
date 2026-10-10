@@ -1,3 +1,7 @@
+## 1.15.51
+- Feat(webdav): Downloads from the WebDAV browser now land in the library automatically — after downloading, each book is imported in place (no re-copy) and shelf folders are created per remote subfolder, mirroring folder imports; plain files under the sync root group under "WebDAV". Download-only: no sync state is touched, nothing is uploaded
+- Feat(webdav): WebDAV 浏览器的下载现在自动入书库——下载完成后每本书原位导入(不重复复制),并按远端子目录创建书架分组(与文件夹导入一致);同步根目录下的散文件归入 "WebDAV" 根分组。纯下载行为:不触碰任何同步状态,绝不上传
+
 ## 1.15.50
 - Feat(import): The shelf shows the new folder as soon as its first book lands (one early refresh), and stays untouched until the whole import finishes (final refresh) — nothing in between
 

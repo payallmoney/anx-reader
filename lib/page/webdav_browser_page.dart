@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/main.dart';
+import 'package:anx_reader/page/home_page/bookshelf_page.dart'
+    show groupImportedBooks;
+import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/models/remote_file.dart';
 import 'package:anx_reader/service/sync/sync_client_base.dart';
 import 'package:anx_reader/service/sync/sync_client_factory.dart';
@@ -9,22 +12,23 @@ import 'package:anx_reader/utils/get_path/webdav_download_dir.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:path/path.dart' as p;
 
 /// Browse the WebDAV storage and download selected files into the
 /// configured download directory, keeping the folder layout under
 /// the sync data root (`/anx/data`).
-class WebdavBrowserPage extends StatefulWidget {
+class WebdavBrowserPage extends ConsumerStatefulWidget {
   const WebdavBrowserPage({super.key, this.initialPath = '/anx/data'});
 
   final String initialPath;
 
   @override
-  State<WebdavBrowserPage> createState() => _WebdavBrowserPageState();
+  ConsumerState<WebdavBrowserPage> createState() => _WebdavBrowserPageState();
 }
 
-class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
+class _WebdavBrowserPageState extends ConsumerState<WebdavBrowserPage> {
   SyncClientBase? _client;
   String _path = '';
   List<RemoteFile> _entries = [];
@@ -154,6 +158,11 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
     var success = 0;
     var fail = 0;
     final names = _selected.toList();
+    // group name -> imported md5s; books land on the shelf grouped by the
+    // remote subfolder they came from (plain files under a "WebDAV" root),
+    // mirroring how folder imports build shelf folders. Download-only: no
+    // sync state is touched, nothing is ever uploaded.
+    final importedByGroup = <String, List<String>>{};
     SmartDialog.showLoading(msg: '${L10n.of(context).webdavDownloading} 0/${names.length}');
     try {
       for (var i = 0; i < names.length; i++) {
@@ -168,10 +177,34 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
           await Directory(p.dirname(localPath)).create(recursive: true);
           await client.downloadFile(remote, localPath);
           success++;
+          // import the downloaded file into the library (files already on
+          // the user's filesystem are referenced in place, never re-copied)
+          try {
+            final md5 = await importBook(
+              File(localPath),
+              ref,
+              refreshShelf: false,
+            );
+            final parts = p.split(rel);
+            final groupName =
+                parts.length > 1 ? parts.first : 'WebDAV';
+            if (md5 != null && md5.isNotEmpty) {
+              importedByGroup
+                  .putIfAbsent(groupName, () => [])
+                  .add(md5);
+            }
+          } catch (e) {
+            AnxLog.severe(
+                'WebDAV browser: import failed $localPath: $e');
+          }
         } catch (e) {
           fail++;
           AnxLog.severe('WebDAV browser: download failed $remote: $e');
         }
+      }
+      // shelf folders per remote subfolder
+      for (final e in importedByGroup.entries) {
+        await groupImportedBooks(e.key, e.value, ref);
       }
     } finally {
       SmartDialog.dismiss(status: SmartStatus.loading);

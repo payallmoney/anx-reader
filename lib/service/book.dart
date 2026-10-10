@@ -439,7 +439,7 @@ void _showImportDialog(
       });
 }
 
-Future<void> importBook(File file, WidgetRef ref,
+Future<String?> importBook(File file, WidgetRef ref,
     {String? precomputedMd5,
     String? storageSubDir,
     int? groupId,
@@ -478,6 +478,7 @@ Future<void> importBook(File file, WidgetRef ref,
   if (refreshShelf) {
     ref.read(bookListProvider.notifier).refresh();
   }
+  return md5;
 }
 
 Future<void> pushToReadingPage(
