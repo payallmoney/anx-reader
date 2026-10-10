@@ -96,6 +96,39 @@ class MainActivity : AudioServiceActivity() {
             }
         }
 
+        // Import foreground service bridge: keeps folder imports running
+        // (with a progress notification + wake lock) while the app is in
+        // the background.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            IMPORT_SERVICE_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    ImportForegroundService.start(
+                        this,
+                        call.argument<String>("name") ?: "",
+                        call.argument<Int>("total") ?: 0,
+                    )
+                    result.success(null)
+                }
+                "update" -> {
+                    ImportForegroundService.updateLive(
+                        this,
+                        call.argument<String>("name") ?: "",
+                        call.argument<Int>("imported") ?: 0,
+                        call.argument<Int>("total") ?: 0,
+                    )
+                    result.success(null)
+                }
+                "stop" -> {
+                    ImportForegroundService.stop(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // SAF tree access: Android folder pickers return content:// tree
         // URIs that dart:io cannot read, so enumerate and copy natively.
         // Handler runs on a BACKGROUND task queue thread at background
@@ -372,6 +405,7 @@ class MainActivity : AudioServiceActivity() {
 
     companion object {
         private const val INSTALL_INFO_CHANNEL = "com.anxcye.anx_reader/install_info"
+        private const val IMPORT_SERVICE_CHANNEL = "com.anxcye.anx_reader/import_service"
         private const val SAF_TREE_CHANNEL = "com.anxcye.anx_reader/saf_tree"
         private const val REQUEST_PICK_DIR = 4711
         private val bookExtensions = setOf("epub", "mobi", "azw3", "fb2", "txt", "pdf")

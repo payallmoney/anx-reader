@@ -1,3 +1,7 @@
+## 1.15.59
+- Feat(import)!: Folder imports now run as an Android foreground service — starting an import posts a persistent progress notification, holds a wake lock, and keeps the import running while the app is backgrounded or the screen locks (system no longer freezes it). The notification clears and the service stops automatically when the import finishes or is cancelled; the persisted resume task remains the safety net if the process is killed
+- Feat(导入)!: 文件夹导入升级为 Android 前台服务——开始导入即发出常驻进度通知并持有唤醒锁,app 退后台或锁屏后系统不再冻结导入;导入完成或取消时通知与自动清除,进程万一被杀仍有持久化断点兜底
+
 ## 1.15.58
 - Feat(bookshelf): Dissolving a folder now asks for confirmation first — same style as the delete-folder dialog (folder name, book count, files-never-deleted note); accidental taps on the dissolve icon no longer instantly scatter the folder
 

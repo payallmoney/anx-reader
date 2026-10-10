@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /// Global state of a running folder import, exposed as a stream so a small
 /// floating progress bar (and the shelf) can follow along without any
@@ -57,6 +59,24 @@ class ImportProgressService {
   final ValueNotifier<ImportProgress> state =
       ValueNotifier(const ImportProgress(phase: ImportPhase.idle));
 
+  /// Android foreground service: keeps the import alive (wake lock +
+  /// progress notification) while the app is backgrounded or the device
+  /// dozes. No-op on desktop.
+  static final MethodChannel _serviceChannel =
+      const MethodChannel('com.anxcye.anx_reader/import_service');
+
+  Future<void> _notifyService(String method,
+      {String? name, int? imported, int? total}) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _serviceChannel.invokeMethod(method, {
+        if (name != null) 'name': name,
+        if (imported != null) 'imported': imported,
+        if (total != null) 'total': total,
+      });
+    } catch (_) {}
+  }
+
   /// Set between items of the import loop; paused keeps the loop waiting.
   Completer<void>? _pauseGate;
   bool _cancelRequested = false;
@@ -78,6 +98,7 @@ class ImportProgressService {
       folderName: folderName,
       total: total,
     );
+    _notifyService('start', name: folderName, total: total);
   }
 
   void update({
@@ -106,6 +127,10 @@ class ImportProgressService {
       failed: failed,
       message: message,
     );
+    _notifyService('update',
+        name: state.value.folderName,
+        imported: state.value.imported,
+        total: state.value.total);
   }
 
   /// Called by the import loop between items. Returns false when the user
@@ -142,6 +167,7 @@ class ImportProgressService {
       _pauseGate!.complete();
     }
     _pauseGate = null;
+    _notifyService('stop');
   }
 
   void finish({bool failed = false, String message = ''}) {
@@ -149,6 +175,7 @@ class ImportProgressService {
       phase: failed ? ImportPhase.failed : ImportPhase.done,
       message: message,
     );
+    _notifyService('stop');
     // auto-clear shortly so the floating bar fades away
     Timer(const Duration(seconds: 4), () {
       if (state.value.phase == ImportPhase.done ||
