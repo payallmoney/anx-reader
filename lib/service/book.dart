@@ -18,6 +18,7 @@ import 'package:anx_reader/providers/iap.dart';
 import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/providers/toc_search.dart';
 import 'package:anx_reader/service/convert_to_epub/txt/convert_from_txt.dart';
+import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/utils/webView/anx_headless_webview.dart';
 import 'package:anx_reader/utils/env_var.dart';
@@ -734,6 +735,11 @@ Future<void> _getBookMetadataLocked(
   String? preferredName,
   int? groupId,
 }) async {
+  // reading comfort first: while a book is open, its webview owns the
+  // main thread — park metadata extraction until the reader is closed
+  // (bounded, so a forgotten open reader cannot stall an import forever)
+  await ImportReadingGate.waitWhileReading();
+
   String serverFileName = Server().setTempFile(file);
 
   String cfi = '';

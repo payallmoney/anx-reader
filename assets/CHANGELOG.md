@@ -1,3 +1,7 @@
+## 1.15.41
+- Feat(reading)!: Reading no longer stutters during folder imports — the reader announces its lifecycle to the import system, which parks metadata extraction while a book is open and resumes when you leave; the progress pill also hides inside the reader, and shelf refreshes are suppressed during reading
+- Feat(阅读)!: 导入文件夹时看书不再卡顿——阅读页把自己的生命周期告知导入系统:看书期间元数据提取自动暂停,退出书后无缝继续;阅读页内不再显示进度悬浮条,阅读期间书架刷新也被抑制
+
 ## 1.15.40
 - Feat(import): Interrupted folder imports now survive an app restart — the task (folder, file list, progress) is persisted while importing, and on the next launch the floating pill reappears and the remaining files continue automatically; a resume also reconciles against the library first so already-imported books are skipped without re-processing
 - Fix(import): Book metadata extraction is now serialized with a global lock — the import temp file is a singleton, so overlapping extractions (possible when resuming over an existing library) overwrote each other's URL and stalled the queue

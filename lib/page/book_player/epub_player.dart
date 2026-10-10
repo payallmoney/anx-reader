@@ -28,6 +28,7 @@ import 'package:anx_reader/providers/bookmark.dart';
 import 'package:anx_reader/providers/chapter_content_bridge.dart';
 import 'package:anx_reader/providers/current_reading.dart';
 import 'package:anx_reader/service/book_player/book_player_server.dart';
+import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:anx_reader/service/tts/dart_epub_tts.dart';
 import 'package:anx_reader/providers/toc_search.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
@@ -1069,6 +1070,10 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   @override
   void initState() {
     book = widget.book;
+    // tell the import system a reader is on screen: metadata extraction
+    // pauses while this page lives (import webviews otherwise compete for
+    // the main thread and make reading stutter)
+    ImportReadingGate.reading = true;
     getThemeColor();
 
     contextMenu = ContextMenu(
@@ -1112,6 +1117,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   @override
   void dispose() {
+    ImportReadingGate.reading = false;
     _scrollDebounceTimer?.cancel();
     _animationController?.dispose();
     saveReadingProgress();

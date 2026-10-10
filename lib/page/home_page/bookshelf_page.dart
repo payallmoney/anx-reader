@@ -17,6 +17,7 @@ import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/service/import_progress.dart';
+import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:anx_reader/service/import_resume.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/color/hash_color.dart';
@@ -1114,8 +1115,9 @@ Future<void> resumeImportTask({
           await PendingImport.save(task);
         }
         final now = DateTime.now();
-        if (identical(copied, copiedEntries.last) ||
-            now.difference(lastRefresh).inSeconds >= 5) {
+          if (identical(copied, copiedEntries.last) ||
+              (!ImportReadingGate.reading &&
+                  now.difference(lastRefresh).inSeconds >= 5)) {
           lastRefresh = now;
           try {
             ref.read(bookListProvider.notifier).refresh();

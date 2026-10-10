@@ -1,5 +1,6 @@
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/service/import_progress.dart';
+import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,11 +25,15 @@ class _ImportProgressBarState extends ConsumerState<ImportProgressBar> {
       child: ValueListenableBuilder<ImportProgress>(
         valueListenable: ImportProgressService.instance.state,
         builder: (context, p, _) {
-          final active = p.phase == ImportPhase.copying ||
-              p.phase == ImportPhase.importing ||
-              p.phase == ImportPhase.paused;
-          if (!active) return const SizedBox.shrink();
-          return _buildPill(context, p);
+        final active = p.phase == ImportPhase.copying ||
+            p.phase == ImportPhase.importing ||
+            p.phase == ImportPhase.paused;
+        // never overlay the reader: the pill is useful on the shelf, but on
+        // top of a book it is visual noise (and reading comfort rules)
+        if (!active || ImportReadingGate.reading) {
+          return const SizedBox.shrink();
+        }
+        return _buildPill(context, p);
         },
       ),
     );
