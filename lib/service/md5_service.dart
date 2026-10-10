@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:anx_reader/models/book.dart';
@@ -23,7 +24,11 @@ class MD5Service {
   /// large books neither block the UI nor load fully into memory.
   static Future<String?> calculateFileMd5(String filePath) async {
     try {
-      return await Isolate.run(() => _md5OfFileSync(filePath));
+      return await Isolate.run(() {
+        // deprioritize MD5 of imported files at the scheduler level
+        _lowerThreadPriority();
+        return _md5OfFileSync(filePath);
+      });
     } catch (e) {
       AnxLog.severe('Error calculating MD5 for $filePath: $e');
       return null;
@@ -136,4 +141,16 @@ class MD5Service {
 
     return results;
   }
+}
+
+/// Lower the calling thread's scheduling priority (nice +10) so hashing
+/// imported files never competes with UI/render threads.
+void _lowerThreadPriority() {
+  try {
+    final lib = DynamicLibrary.process();
+    final setpriority = lib
+        .lookupFunction<Int32 Function(Int32, Int32, Int32),
+            int Function(int, int, int)>('setpriority');
+    setpriority(0, 0, 10);
+  } catch (_) {}
 }

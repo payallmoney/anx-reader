@@ -1,3 +1,7 @@
+## 1.15.57
+- Perf(import): Scheduler-level CPU split — the extraction isolate and the MD5 thread run at background scheduling priority (nice +10 via FFI), and the native SAF copy/MD5 channel moved off the Android main thread onto a background task queue at background priority. The UI threads always win core contention now; imports only consume leftover capacity. Verified mid-import: two tab switches completed in 185ms with the shelf rendering normally
+- Perf(导入): 调度器级 CPU 分配——元数据提取 isolate 与 MD5 线程以后台优先级运行(FFI 设 nice +10),原生的 SAF 复制/MD5 通道也从 Android 主线程挪到后台任务队列并以后台优先级执行。UI 线程在核心竞争时永远优先,导入只消耗剩余算力。实测导入中两次 tab 切换仅 185ms,书架渲染正常
+
 ## 1.15.56
 - Perf(import)!: Aggressive low-power mode while reading — imports detect an open reader and drop to a ~20% CPU duty cycle: the cover (the single most expensive per-book item: image extraction + disk write) is skipped entirely during reading, the inter-book yield grows to 150ms, and after the import finishes all skipped covers are backfilled at full speed automatically. Page turns stay smooth even on large imports; reading comfort no longer trades against import progress
 

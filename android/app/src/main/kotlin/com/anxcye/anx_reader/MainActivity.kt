@@ -98,10 +98,17 @@ class MainActivity : AudioServiceActivity() {
 
         // SAF tree access: Android folder pickers return content:// tree
         // URIs that dart:io cannot read, so enumerate and copy natively.
+        // Handler runs on a BACKGROUND task queue thread at background
+        // priority: enumerate/copy/MD5 of a 630-book import used to run on
+        // the Android main thread itself (jank and ANR during imports).
+        val safTaskQueue = flutterEngine.dartExecutor.makeBackgroundTaskQueue()
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            SAF_TREE_CHANNEL
+            SAF_TREE_CHANNEL,
+            io.flutter.plugin.common.StandardMethodCodec.INSTANCE,
+            safTaskQueue
         ).setMethodCallHandler { call, result ->
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
             when (call.method) {
                 "pickDirectory" -> {
                     // file_picker's getDirectoryPath converts the SAF tree

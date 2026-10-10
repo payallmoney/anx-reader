@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
@@ -11,8 +13,24 @@ import 'package:path/path.dart' as p;
 ///
 /// Returns a map shaped like the webview onMetadata payload, or null when
 /// the file cannot be parsed (caller falls back to the webview path).
+/// Lower the calling thread's scheduling priority (nice +10) so the
+/// scheduler always favors UI/render threads on core contention — the
+/// closest thing to a "CPU split" Android offers to an app.
+void _lowerThreadPriority() {
+  try {
+    final lib = DynamicLibrary.process();
+    final setpriority = lib.lookupFunction<
+        Int32 Function(Int32, Int32, Int32),
+        int Function(int, int, int)>('setpriority');
+    setpriority(0, 0, 10); // PRIO_PROCESS, calling thread, nice 10
+  } catch (_) {}
+}
+
 Map<String, String?>? extractEpubMetadataDart((String, String, bool) args) {
   final (path, coverDir, skipCover) = args;
+  // runs on the extraction isolate's thread — deprioritize the whole
+  // extraction (zip parse, cover write) at the scheduler level
+  _lowerThreadPriority();
   try {
     final bytes = File(path).readAsBytesSync();
     final archive = ZipDecoder().decodeBytes(bytes);

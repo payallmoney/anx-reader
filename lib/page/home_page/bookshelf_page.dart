@@ -1132,7 +1132,7 @@ Future<void> resumeImportTask({
         // import loop would otherwise saturate the UI. While reading, drop
         // to a low duty cycle (~20% CPU) so page turns stay smooth
         await Future<void>.delayed(
-            Duration(milliseconds: ImportReadingGate.reading ? 150 : 40));
+            Duration(milliseconds: ImportReadingGate.reading ? 80 : 40));
       } catch (e) {
         failed++;
         task.failedNames.add(entry.name);
@@ -1354,7 +1354,7 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       progress.update(imported: imported, failed: failed);
       // yield the main thread between books; reading drops the duty cycle
       await Future<void>.delayed(
-          Duration(milliseconds: ImportReadingGate.reading ? 150 : 40));
+          Duration(milliseconds: ImportReadingGate.reading ? 80 : 40));
     } catch (e) {
       failed++;
       task.failedNames.add(entry.name);
