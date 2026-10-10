@@ -975,21 +975,58 @@
   "notesJsonImportInvalid": "笔记 JSON 格式无效",
   "settingsSyncWebdavUrlHint": "请填写可写入的目录 URL。应用会在该目录下创建 anx/ 文件夹用于同步。",
   "settingsAdvancedTrustUserCertificates": "信任用户/自定义 CA 证书",
-  "settingsAdvancedTrustUserCertificatesDesc": "允许使用用户安装或自签名证书的 HTTPS（如私有 Nextcloud）。默认关闭；在不可信网络请保持关闭。"
-,
+  "settingsAdvancedTrustUserCertificatesDesc": "允许使用用户安装或自签名证书的 HTTPS（如私有 Nextcloud）。默认关闭；在不可信网络请保持关闭。",
   "bookshelfNewFolder": "新建文件夹",
   "bookshelfRenameFolder": "重命名文件夹",
   "bookshelfMoveToFolder": "移动到文件夹",
   "bookshelfMoveToShelf": "书架（顶层）",
   "bookshelfFolderNameHint": "文件夹名称",
-  "bookshelfNewSubFolder": "在此新建子文件夹"
-,
+  "bookshelfNewSubFolder": "在此新建子文件夹",
   "importImportingN": "正在导入书籍 {done}/{total}…",
   "importPaused": "已暂停 ({done}/{total})",
   "importCancelled": "导入已取消,已保存 {done} 本。重新导入该文件夹可继续。",
   "importDoneMsg": "导入完成,共 {done} 本",
   "bookshelfDeleteFolder": "删除文件夹",
-  "bookshelfDeleteFolderConfirm": "删除文件夹\"{name}\"?其中 {count} 本书将移回书架(书籍文件不会被删除),子文件夹也会一并移除。"
-,
-  "importResumeAsk": "上次导入\"{name}\"被中断,还剩 {count} 个文件未导入。现在继续吗?"
+  "bookshelfDeleteFolderConfirm": "删除文件夹\"{name}\"?其中 {count} 本书将移回书架(书籍文件不会被删除),子文件夹也会一并移除。",
+  "importResumeAsk": "上次导入\"{name}\"被中断,还剩 {count} 个文件未导入。现在继续吗?",
+  "@importResumeAsk": {
+    "placeholders": {
+      "name": {},
+      "count": {}
+    }
+  },
+  "@bookshelfDeleteFolderConfirm": {
+    "placeholders": {
+      "name": {},
+      "count": {}
+    }
+  },
+  "@importImportingN": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "@importPaused": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "@importCancelled": {
+    "placeholders": {
+      "done": {}
+    }
+  },
+  "@importDoneMsg": {
+    "placeholders": {
+      "done": {}
+    }
+  },
+  "@importCopyingBooks": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  }
 }

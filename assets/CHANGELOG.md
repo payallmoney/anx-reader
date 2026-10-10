@@ -1,3 +1,8 @@
+## 1.15.55
+- Fix(import): The resume dialog swapped the folder name and the remaining count — the generated l10n signature was (count, name) because the placeholders metadata was missing; explicit metadata now pins (name, count), also fixing the delete-folder confirmation which had the same swap
+
+- Fix(导入): 恢复导入弹窗的文件夹名和剩余数量互换了——缺少 placeholders 元数据导致生成的文案参数序为(数量,名称);现已显式声明(名称,数量),同样问题的删除文件夹确认框一并修正
+
 ## 1.15.54
 - Perf(import): Covers are now written to disk inside the extraction isolate — previously every book shipped a multi-megabyte base64 data URI across isolate boundaries and decoded it on the main thread; the isolate writes the cover file directly and only a KB-sized path crosses over, removing the last big per-book main-thread cost during imports
 
