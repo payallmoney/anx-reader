@@ -75,7 +75,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "de": [
@@ -154,7 +158,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "es": [
@@ -233,7 +241,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "fr": [
@@ -312,7 +324,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "it": [
@@ -391,7 +407,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "ja": [
@@ -470,7 +490,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "ko": [
@@ -549,7 +573,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "pt": [
@@ -628,7 +656,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "ro": [
@@ -707,7 +739,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "ru": [
@@ -786,7 +822,11 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ],
 
   "tr": [
@@ -865,6 +905,10 @@
     "bookshelfMoveToFolder",
     "bookshelfMoveToShelf",
     "bookshelfFolderNameHint",
-    "bookshelfNewSubFolder"
+    "bookshelfNewSubFolder",
+    "importImportingN",
+    "importPaused",
+    "importCancelled",
+    "importDoneMsg"
   ]
 }

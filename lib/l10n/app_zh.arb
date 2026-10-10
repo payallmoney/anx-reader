@@ -983,4 +983,9 @@
   "bookshelfMoveToShelf": "书架（顶层）",
   "bookshelfFolderNameHint": "文件夹名称",
   "bookshelfNewSubFolder": "在此新建子文件夹"
+,
+  "importImportingN": "正在导入书籍 {done}/{total}…",
+  "importPaused": "已暂停 ({done}/{total})",
+  "importCancelled": "导入已取消,已保存 {done} 本。重新导入该文件夹可继续。",
+  "importDoneMsg": "导入完成,共 {done} 本"
 }

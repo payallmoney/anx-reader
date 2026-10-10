@@ -1,3 +1,9 @@
+## 1.15.34
+- Feat(import): Non-blocking import progress pill replaces the full-screen loading dialog — a small floating capsule at the top shows live "Importing books n/N", tap to expand Pause / Resume / Cancel; the app (including reading) stays fully usable during imports, and a cancelled import keeps everything already saved (re-import the folder to continue)
+- Perf(import): The copy phase now runs 3 files in parallel and the import loop polls a shared progress service, roughly 25% faster end-to-end on a 60-book folder
+- Fix(导入)!: 全屏加载框替换为不阻塞的悬浮进度胶囊——顶部小条实时显示"正在导入书籍 n/N",点开可暂停/恢复/取消;导入期间 app(包括阅读)完全可用,取消导入会保留已导入的书(重新导入该文件夹即可续传)
+- Perf(导入): 复制阶段改为 3 文件并行,导入循环共用进度服务;60 本实测端到端提速约 25%
+
 ## 1.15.31 / 1.15.32
 - Fix(import)!: Folder import is now two-phase exactly as requested — first create the shelf folder and copy every file into app storage, then import them one by one; the folder exists from the very start and can only ever appear once, no more one-folder-per-file flashes that only corrected themselves after an app restart
 - Fix(import): The loading dialog now reports live progress (n books saved) instead of freezing on "copying", and the shelf refreshes as books land inside the folder

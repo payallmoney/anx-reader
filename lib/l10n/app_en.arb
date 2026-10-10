@@ -983,4 +983,9 @@
   "bookshelfMoveToShelf": "Shelf (top level)",
   "bookshelfFolderNameHint": "Folder name",
   "bookshelfNewSubFolder": "New subfolder here"
+,
+  "importImportingN": "Importing books {done}/{total}…",
+  "importPaused": "Paused at {done}/{total}",
+  "importCancelled": "Import cancelled, {done} books saved. Re-import the folder to continue.",
+  "importDoneMsg": "Import finished: {done} books"
 }

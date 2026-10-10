@@ -18,6 +18,7 @@ import 'package:anx_reader/service/tts/tts_service.dart' as tts_service;
 import 'package:anx_reader/service/tts/tts_handler.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/service/shelf_groups.dart';
+import 'package:anx_reader/widgets/common/import_progress_bar.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/md5_service.dart';
@@ -398,7 +399,17 @@ class _MyAppState extends ConsumerState<MyApp>
               FlutterSmartDialog.observer,
               heroineController
             ],
-            builder: FlutterSmartDialog.init(),
+            builder: (context, child) {
+              // non-blocking import progress pill, visible everywhere
+              // (home, reader) without interrupting reading
+              child = FlutterSmartDialog.init()(context, child);
+              return Stack(
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  const ImportProgressBar(),
+                ],
+              );
+            },
             navigatorKey: navigatorKey,
             locale: prefsNotifier.locale,
             localeListResolutionCallback: _resolveLocale,
