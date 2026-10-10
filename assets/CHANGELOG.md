@@ -1,3 +1,8 @@
+## 1.15.28
+- Fix(import): Imported folders are named after the picked folder again — v1.15.24 preferred deriving the name from the SAF document id, which some third-party file providers turn into junk like "root"; the folder's display name is now authoritative and the id is only a fallback for storage volume labels
+
+- Fix(导入): 导入的文件夹恢复使用所选文件夹的真实名称——v1.15.24 起优先从 SAF document id 推导名称,部分第三方文件管理器会给出 "root" 之类的垃圾值;现在以显示名称为准,document id 仅作为存储卷标名的兜底
+
 ## 1.15.27
 - Fix(bookshelf): Entering the bookshelf no longer spins repeatedly — the folder list was read as a side watch, so the shelf built twice per entry (once with no folders, then again when the folder query landed) and every reload flashed the loading spinner; the list now awaits folders in a single build and reloads keep the shelf on screen
 - Fix(bookshelf): Loose books no longer appear twice — the built-in pseudo "Root" group was treated as a shelf folder and wrapped every ungrouped book into an extra folder cell

@@ -135,21 +135,20 @@ class MainActivity : AudioServiceActivity() {
                             if (dir != null && dir.exists()) {
                                 val out = mutableListOf<Map<String, Any>>()
                                 walkFileTree(dir, dir, out)
-                                // dir.name can be a volume label on some
-                                // devices; derive the folder name from the
-                                // document id like the SAF branch below
+                                // the folder's display name is authoritative;
+                                // the document id is only a fallback for
+                                // volume labels ("primary", "内部存储", "0"...)
+                                // — preferring the id (v1.15.24) made some
+                                // third-party providers yield junk like "root"
                                 val fastDocId = try {
                                     android.provider.DocumentsContract.getTreeDocumentId(treeUri)
                                 } catch (e: Exception) { "" }
                                 val fastDerived =
                                     fastDocId.substringAfterLast(':').substringAfterLast('/')
-                                val fastName = when {
-                                    fastDerived.isNotBlank() &&
-                                        (dir.name.isNullOrBlank() || dir.name == "primary" ||
-                                        dir.name!!.equals("internal storage", true) ||
-                                        dir.name!!.contains("存储") || dir.name == fastDocId) ->
-                                        fastDerived
-                                    else -> dir.name ?: fastDerived.ifBlank { "imported" }
+                                val fastName = if (isJunkRootName(dir.name, fastDocId)) {
+                                    fastDerived.ifBlank { "imported" }
+                                } else {
+                                    dir.name ?: fastDerived.ifBlank { "imported" }
                                 }
                                 result.success(hashMapOf(
                                     "rootName" to fastName,
@@ -173,12 +172,10 @@ class MainActivity : AudioServiceActivity() {
                         } catch (e: Exception) { "" }
                         val derived = docId.substringAfterLast(':').substringAfterLast('/')
                         val rawName = root.name
-                        val rootName = when {
-                            rawName.isNullOrBlank() || rawName == "primary" ||
-                                rawName.equals("internal storage", true) ||
-                                rawName.contains("存储") || rawName == docId ->
-                                derived.ifBlank { "imported" }
-                            else -> rawName
+                        val rootName = if (isJunkRootName(rawName, docId)) {
+                            derived.ifBlank { "imported" }
+                        } else {
+                            rawName!!
                         }
                         result.success(hashMapOf(
                             "rootName" to rootName,
@@ -292,6 +289,17 @@ class MainActivity : AudioServiceActivity() {
 
     /// Resolve a SAF tree uri of the external-storage provider into a real
     /// file path, e.g. tree/primary%3ATestBooks -> /storage/emulated/0/TestBooks
+    /// True when [name] is a volume/storage label rather than a real folder
+    /// name ("primary", "Internal storage", "内部存储", "0", "sdcard"...) or
+    /// just echoes the document id.
+    private fun isJunkRootName(name: String?, docId: String): Boolean {
+        if (name.isNullOrBlank()) return true
+        if (name == docId) return true
+        val n = name.trim().lowercase()
+        return n == "primary" || n == "internal storage" || n == "0" ||
+            n == "sdcard" || n == "emulated" || name.contains("存储")
+    }
+
     private fun treeUriToFile(uri: Uri): File? {
         if (uri.scheme != "content") return null
         val docId = try {
