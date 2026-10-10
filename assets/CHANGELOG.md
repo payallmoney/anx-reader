@@ -1,3 +1,7 @@
+## 1.15.47
+- Refactor(import)!: One pipeline iteration per book — copy, import and the resume checkpoint complete together, and the sequence number is persisted immediately; a resume therefore never repeats work. A staged copy left by an interrupted run is reused when its file size matches (corrupt partial copies are detected and re-copied); the separate copy-then-import phases are gone
+- Refactor(导入)!: 每本书一个流水线迭代——复制、导入、断点记录一次完成,序号立刻落盘;恢复导入绝不重复已做的工作。上次中断留下的已复制文件在校验大小一致后直接复用(不完整的部分副本会被识别并重新复制);独立的"先复制后导入"两阶段已移除
+
 ## 1.15.46
 - Feat(import): Resuming an interrupted import now asks first — on the next launch a dialog names the interrupted folder and the remaining file count; Continue resumes from the exact breakpoint, Cancel drops the task (already-imported books stay; re-importing the folder later picks up the rest)
 

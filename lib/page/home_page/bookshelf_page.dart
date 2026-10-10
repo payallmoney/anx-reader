@@ -17,6 +17,7 @@ import 'package:anx_reader/providers/book_filters.dart';
 import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/service/import_progress.dart';
+import 'package:anx_reader/service/md5_service.dart';
 import 'package:anx_reader/service/import_reading_gate.dart';
 import 'package:anx_reader/service/import_resume.dart';
 import 'package:anx_reader/page/search/search_page.dart';
@@ -1057,69 +1058,62 @@ Future<void> resumeImportTask({
       .where((f) => !task.doneNames.contains(f.name))
       .toList();
 
-  var copiedCount = task.doneNames.length;
+  var processed = task.doneNames.length;
   // seed counters from the persisted task so a RESUMED import shows the
   // true position ("Importing books 45/60") instead of restarting at 1
-  var imported = task.doneNames.length;
   var failed = task.failedNames.length;
   final importedMd5s = <String>[];
   final progress = ImportProgressService.instance;
   progress.start(task.subDirName, task.fileNames.length);
-  progress.update(copied: copiedCount);
+  progress.update(phase: ImportPhase.importing, copied: processed);
 
-  // Phase 1: copy every remaining file into app storage first —
-  // sequentially (parallel SAF streaming froze real devices; see 1.15.37).
-  final copiedEntries = <SafCopyResult>[];
-  var copyCancelled = false;
-  for (final entry in remainingFiles) {
-    if (!await progress.checkpoint()) {
-      copyCancelled = true;
-      break;
-    }
-    try {
-      final copied = await SafTree.copyToDir(entry.uri, entry.name, destDir);
-      copiedEntries.add(copied);
-      copiedCount++;
-      progress.update(copied: copiedCount);
-    } catch (e) {
-      failed++;
-      AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
-    }
-  }
-
-  // Phase 2: import the staged copies one by one; shelf refresh is
-  // debounced (a per-book refresh rebuilt the whole grid and froze UIs).
+  // Single-pass pipeline: each book completes copy -> import -> checkpoint
+  // in one iteration, and its sequence number is persisted immediately, so
+  // a resume never repeats work. A staged copy from an earlier interrupted
+  // run is reused when its size matches (no re-copy), and the md5 is then
+  // computed on import.
   var lastRefresh = DateTime.now();
-  var cancelled = copyCancelled;
+  var cancelled = false;
   try {
-    if (progress.state.value.phase != ImportPhase.paused) {
-      progress.update(phase: ImportPhase.importing, imported: imported);
-    }
-    for (final copied in copiedEntries) {
+    for (final entry in remainingFiles) {
       if (!await progress.checkpoint()) {
         cancelled = true;
         break;
       }
       try {
+        String stagedPath;
+        String? md5;
+        final existing = File('$destDir/${entry.name}');
+        if (existing.existsSync() && existing.lengthSync() == entry.size) {
+          // already copied by a previous run — import the staged copy as-is
+          stagedPath = existing.path;
+          AnxLog.info('Import resume: reusing staged copy ${entry.name}');
+          md5 = await MD5Service.calculateFileMd5(stagedPath);
+        } else {
+          final copied =
+              await SafTree.copyToDir(entry.uri, entry.name, destDir);
+          stagedPath = copied.path;
+          md5 = copied.md5;
+        }
         await importBook(
-          File(copied.path),
+          File(stagedPath),
           ref,
-          precomputedMd5: copied.md5,
+          precomputedMd5: md5,
           storageSubDir: subDir,
           groupId: groupId,
         );
-        importedMd5s.add(copied.md5);
-        imported++;
-        task.doneNames.add(copied.path.split('/').last);
-        progress.update(imported: imported, failed: failed);
+        if (md5 != null) importedMd5s.add(md5);
+        processed++;
+        task.doneNames.add(entry.name);
+        progress.update(imported: processed, failed: failed);
         // persist resume state every few books (cheap JSON write)
-        if (imported % 3 == 0) {
+        if (processed % 3 == 0) {
           await PendingImport.save(task);
         }
         final now = DateTime.now();
-          if (identical(copied, copiedEntries.last) ||
-              (!ImportReadingGate.reading &&
-                  now.difference(lastRefresh).inSeconds >= 5)) {
+        if (identical(entry, remainingFiles.last) ||
+            (!ImportReadingGate.reading &&
+                now.difference(lastRefresh).inSeconds >= 5)) {
           lastRefresh = now;
           try {
             ref.read(bookListProvider.notifier).refresh();
@@ -1127,10 +1121,9 @@ Future<void> resumeImportTask({
         }
       } catch (e) {
         failed++;
-        task.failedNames.add(copied.path.split('/').last);
+        task.failedNames.add(entry.name);
         progress.update(failed: failed);
-        AnxLog.severe(
-            'SAF import: failed ${copied.path.split('/').last}: $e');
+        AnxLog.severe('SAF import: failed ${entry.name}: $e');
       }
     }
     await PendingImport.save(task);
@@ -1145,12 +1138,12 @@ Future<void> resumeImportTask({
   final cancelledByUser =
       cancelled || progress.state.value.phase == ImportPhase.paused;
   progress.finish(
-    failed: failed > 0 && imported == 0,
+    failed: failed > 0 && processed == 0,
     message: context == null
         ? ''
         : (cancelledByUser
-            ? L10n.of(context).importCancelled(imported)
-            : L10n.of(context).importDoneMsg(imported)),
+            ? L10n.of(context).importCancelled(processed)
+            : L10n.of(context).importDoneMsg(processed)),
   );
   // task fully done -> drop the resume record; cancelled/paused -> keep it
   // so the next app start picks up the remaining files
@@ -1160,7 +1153,7 @@ Future<void> resumeImportTask({
     await PendingImport.save(task);
   }
   AnxLog.info(
-      'SAF import: done, copied $copiedCount, $imported imported, $failed failed, ${importedMd5s.length} md5s, remaining ${task.remaining}');
+      'SAF import: done, $processed processed, $failed failed, ${importedMd5s.length} md5s, remaining ${task.remaining}');
 }
 
 /// Put a batch of imported books into a shelf folder named after the
@@ -1288,32 +1281,18 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
   );
   await PendingImport.save(task);
 
-  // phase 1: copy everything into app storage
+  // single-pass pipeline: per book, copy -> import -> checkpoint (same as
+  // resumeImportTask)
   var imported = 0;
   var failed = 0;
   final importedMd5s = <String>[];
   final progress = ImportProgressService.instance;
   progress.start(subDirName, listing.files.length);
-  final copiedEntries = <SafCopyResult>[];
+  progress.update(phase: ImportPhase.importing);
   for (final entry in listing.files) {
     if (!await progress.checkpoint()) break;
     try {
       final copied = await SafTree.copyToDir(entry.uri, entry.name, destDir);
-      copiedEntries.add(copied);
-      progress.update(copied: copiedEntries.length);
-    } catch (e) {
-      failed++;
-      AnxLog.severe('SAF import: copy failed ${entry.name}: $e');
-    }
-  }
-
-  // phase 2: import the staged copies
-  if (progress.state.value.phase != ImportPhase.paused) {
-    progress.update(phase: ImportPhase.importing, imported: 0);
-  }
-  for (final copied in copiedEntries) {
-    if (!await progress.checkpoint()) break;
-    try {
       await importBook(
         File(copied.path),
         ref,
@@ -1323,16 +1302,16 @@ Future<int> importSafTreeCore(String treeUri, WidgetRef ref) async {
       );
       importedMd5s.add(copied.md5);
       imported++;
-      task.doneNames.add(copied.path.split('/').last);
+      task.doneNames.add(entry.name);
       if (imported % 3 == 0) {
         await PendingImport.save(task);
       }
       progress.update(imported: imported, failed: failed);
     } catch (e) {
       failed++;
+      task.failedNames.add(entry.name);
       progress.update(failed: failed);
-      AnxLog.severe(
-          'SAF import: failed ${copied.path.split('/').last}: $e');
+      AnxLog.severe('SAF import: failed ${entry.name}: $e');
     }
   }
   await PendingImport.save(task);
