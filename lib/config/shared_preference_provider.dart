@@ -1335,6 +1335,25 @@ class Prefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  SortFieldEnum get folderSortField {
+    return SortFieldEnum.values.firstWhere(
+      (element) => element.name == prefs.getString('folderSortField'),
+      orElse: () => SortFieldEnum.title,
+    );
+  }
+
+  set folderSortField(SortFieldEnum field) {
+    prefs.setString('folderSortField', field.name);
+  }
+
+  bool get folderSortAsc {
+    return prefs.getBool('folderSortAsc') ?? true;
+  }
+
+  set folderSortAsc(bool value) {
+    prefs.setBool('folderSortAsc', value);
+  }
+
   SortOrderEnum get sortOrder {
     return SortOrderEnum.values.firstWhere(
       (element) => element.name == prefs.getString('sortOrder'),

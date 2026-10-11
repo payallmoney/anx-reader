@@ -1035,5 +1035,7 @@
       "name": {},
       "count": {}
     }
-  }
+  },
+  "commonSortAscending": "升序",
+  "commonSortDescending": "降序"
 }

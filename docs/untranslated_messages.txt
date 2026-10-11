@@ -83,7 +83,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "de": [
@@ -170,7 +172,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "es": [
@@ -257,7 +261,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "fr": [
@@ -344,7 +350,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "it": [
@@ -431,7 +439,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "ja": [
@@ -518,7 +528,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "ko": [
@@ -605,7 +617,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "pt": [
@@ -692,7 +706,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "ro": [
@@ -779,7 +795,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "ru": [
@@ -866,7 +884,9 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ],
 
   "tr": [
@@ -953,6 +973,8 @@
     "bookshelfDeleteFolder",
     "bookshelfDeleteFolderConfirm",
     "importResumeAsk",
-    "bookshelfDissolveFolderConfirm"
+    "bookshelfDissolveFolderConfirm",
+    "commonSortAscending",
+    "commonSortDescending"
   ]
 }

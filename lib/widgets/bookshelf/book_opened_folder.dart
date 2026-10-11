@@ -1,4 +1,5 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/enums/sort_field.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book.dart';
@@ -8,6 +9,7 @@ import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/widgets/bookshelf/book_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lpinyin/lpinyin.dart';
 
 /// Folder contents dialog. Shelf folders are purely virtual: this dialog
 /// shows the folder's direct member books plus its subfolders, and offers
@@ -37,6 +39,8 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
   List<TbGroup> subFolders = [];
   late TextEditingController _nameController;
   String currentGroupName = "";
+  SortFieldEnum _sortField = Prefs().folderSortField;
+  bool _sortAsc = Prefs().folderSortAsc;
 
   @override
   void initState() {
@@ -44,7 +48,79 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
     books = widget.books;
     currentGroupName = widget.groupName;
     _nameController = TextEditingController(text: currentGroupName);
+    _applySort();
     _loadSubFolders();
+  }
+
+  void _applySort() {
+    int compare(Book a, Book b) {
+      switch (_sortField) {
+        case SortFieldEnum.author:
+          return _byName(a.author, b.author);
+        case SortFieldEnum.progress:
+          return a.readingPercentage.compareTo(b.readingPercentage);
+        case SortFieldEnum.importTime:
+        case SortFieldEnum.lastReadTime:
+          return a.createTime.compareTo(b.createTime);
+        case SortFieldEnum.title:
+          return _byName(a.title, b.title);
+      }
+    }
+
+    books.sort((a, b) => _sortAsc ? compare(a, b) : compare(b, a));
+  }
+
+  static int _byName(String a, String b) {
+    try {
+      return PinyinHelper.getPinyin(a, format: PinyinFormat.WITHOUT_TONE)
+          .compareTo(
+              PinyinHelper.getPinyin(b, format: PinyinFormat.WITHOUT_TONE));
+    } catch (_) {
+      return a.compareTo(b);
+    }
+  }
+
+  Future<void> _showSortMenu() async {
+    final l10n = L10n.of(context);
+    final choice = await showDialog<SortFieldEnum>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.bookshelfSort),
+        children: [
+          for (final field in [
+            SortFieldEnum.title,
+            SortFieldEnum.author,
+            SortFieldEnum.progress,
+            SortFieldEnum.importTime,
+          ])
+            RadioListTile<SortFieldEnum>(
+              value: field,
+              groupValue: _sortField,
+              title: Text(field.getL10n(dialogContext)),
+              onChanged: (v) => Navigator.pop(dialogContext, v),
+            ),
+          CheckboxListTile(
+            value: _sortAsc,
+            title: Text(_sortAsc
+                ? l10n.commonSortAscending
+                : l10n.commonSortDescending),
+            onChanged: (v) => Navigator.pop(dialogContext, SortFieldEnum.title),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    setState(() {
+      if (choice == _sortField) {
+        _sortAsc = !_sortAsc;
+      } else {
+        _sortField = choice;
+        if (choice == SortFieldEnum.progress) _sortAsc = false;
+      }
+      Prefs().folderSortField = _sortField;
+      Prefs().folderSortAsc = _sortAsc;
+      _applySort();
+    });
   }
 
   @override
@@ -272,6 +348,11 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                   ),
                 ),
                 // folder actions: equal-spaced icons in the top-right corner
+                _folderActionIcon(
+                  tooltip: L10n.of(context).bookshelfSort,
+                  icon: Icons.sort,
+                  onTap: _showSortMenu,
+                ),
                 _folderActionIcon(
                   tooltip: isEditing
                       ? L10n.of(context).commonCancel

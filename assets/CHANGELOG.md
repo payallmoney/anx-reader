@@ -1,3 +1,8 @@
+## 1.15.64
+- Feat(bookshelf): Folder dialog gains a sort button (icon at the head of the title-bar action row) — sort the folder's books by title (pinyin-aware), author, reading progress or import time, with an ascending/descending toggle; the choice is remembered per dialog across restarts and applies immediately to the grid
+
+- Feat(书架): 文件夹弹窗新增排序按钮(标题栏操作图标第一位)——可按标题(拼音序)、作者、阅读进度或导入时间排序,并支持升序/降序切换;排序选择持久保存,网格立即生效
+
 ## 1.15.63
 - Fix(import)!: Purge poisoned "done" entries from interrupted-import tasks — tasks created before 1.15.62 carried wrongly-marked-done files (skipped by the library-wide basename match) that the new reconciliation never revisited, so those books stayed missing forever; on resume the done set is now rebuilt from scratch against the exact storage paths, healing old poisoned tasks automatically
 
