@@ -1,3 +1,8 @@
+## 1.15.67
+- Feat(bookshelf): Book cover titles allow up to 5 lines (was 3), so long titles show more before ellipsizing
+
+- Feat(书架): 封面标题最多显示 5 行(原为 3 行),长标题在省略前能看到更多内容
+
 ## 1.15.66
 - Feat(bookshelf): The folder dialog's first line gains a close (X) button at the far right for dismissing the dialog without reaching the outside tap area
 

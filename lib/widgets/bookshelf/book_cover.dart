@@ -77,7 +77,7 @@ class BookCover extends StatelessWidget {
                         if (showTitle)
                           Text(
                             book.title,
-                            maxLines: 3,
+                            maxLines: 5,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: titleFontSize,
