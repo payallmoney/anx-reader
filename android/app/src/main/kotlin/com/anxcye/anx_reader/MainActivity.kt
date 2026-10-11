@@ -1,5 +1,6 @@
 package com.anxcye.anx_reader
 
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
@@ -203,7 +204,8 @@ class MainActivity : AudioServiceActivity() {
                             return@setMethodCallHandler
                         }
                         val out = mutableListOf<Map<String, Any>>()
-                        walkTree(root, out)
+                        walkTree(applicationContext, treeUri, root, out)
+                        android.util.Log.i("anx_import", "SAF walkTree: ${out.size} files under ${root.uri}")
                         // root.name can be a volume label ("primary",
                         // "Internal storage", "内部存储") on some providers;
                         // derive the folder name from the document id instead
@@ -378,26 +380,65 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
-    private fun walkTree(dir: DocumentFile, out: MutableList<Map<String, Any>>) {
-        val children = try {
-            dir.listFiles()
+    /// Enumerate a SAF directory using direct child-document queries with a
+    /// MINIMAL projection: DocumentFile.listFiles() projects every column and
+    /// some providers silently drop rows once the 2MB cursor window fills
+    /// (large folders lost a third of their entries). Row width here is a
+    /// few dozen bytes, so hundreds of entries fit fine.
+    private fun walkTree(
+        context: Context,
+        treeUri: Uri,
+        dir: DocumentFile,
+        out: MutableList<Map<String, Any>>
+    ) {
+        val childrenUri = try {
+            android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeUri,
+                android.provider.DocumentsContract.getDocumentId(dir.uri)
+            )
         } catch (e: Exception) {
-            emptyArray()
+            return
         }
-        for (doc in children) {
-            if (doc.isDirectory) {
-                walkTree(doc, out)
-            } else {
-                val name = doc.name ?: continue
-                val ext = name.substringAfterLast('.', "").lowercase()
-                if (ext in bookExtensions) {
-                    out.add(
-                        hashMapOf(
-                            "uri" to doc.uri.toString(),
-                            "name" to name,
-                            "size" to doc.length(),
+        val projection = arrayOf(
+            android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE,
+            android.provider.DocumentsContract.Document.COLUMN_SIZE,
+        )
+        val cursor = try {
+            context.contentResolver.query(childrenUri, projection, null, null, null)
+        } catch (e: Exception) {
+            null
+        }
+        cursor?.use { c ->
+            while (c.moveToNext()) {
+                try {
+                    val docId = c.getString(0) ?: continue
+                    val name = c.getString(1) ?: continue
+                    val mime = c.getString(2) ?: ""
+                    val size = if (c.isNull(3)) 0L else c.getLong(3)
+                    if (mime == android.provider.DocumentsContract.Document.MIME_TYPE_DIR) {
+                        val sub = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                        val subDoc = DocumentFile.fromTreeUri(context, sub)
+                        if (subDoc != null) {
+                            walkTree(context, treeUri, subDoc, out)
+                        }
+                        continue
+                    }
+                    val ext = name.substringAfterLast('.', "").lowercase()
+                    if (ext in bookExtensions) {
+                        val docUri = android.provider.DocumentsContract
+                            .buildDocumentUriUsingTree(treeUri, docId)
+                        out.add(
+                            hashMapOf(
+                                "uri" to docUri.toString(),
+                                "name" to name,
+                                "size" to size,
+                            )
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("anx_import", "SAF walkTree row skipped: ${e.message}")
                 }
             }
         }

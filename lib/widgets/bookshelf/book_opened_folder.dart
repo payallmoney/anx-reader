@@ -289,24 +289,44 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: isEditingName
-          ? Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(),
-                    ),
-                    autofocus: true,
-                  ),
-                ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // line 1: centered folder name (+ rename button at the right)
+          Row(
+            children: [
+              Expanded(
+                child: isEditingName
+                    ? TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                        autofocus: true,
+                      )
+                    : GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            isEditingName = true;
+                          });
+                        },
+                        child: Text(
+                          currentGroupName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+              ),
+              if (isEditingName) ...[
                 IconButton(
-                  icon: Icon(Icons.check),
+                  icon: const Icon(Icons.check),
                   onPressed: _updateGroupName,
                 ),
                 IconButton(
-                  icon: Icon(Icons.close),
+                  icon: const Icon(Icons.close),
                   onPressed: () {
                     setState(() {
                       _nameController.text = currentGroupName;
@@ -314,119 +334,109 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                     });
                   },
                 ),
-              ],
-            )
-          : Row(
-              children: [
-                // tap the name to rename it
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        isEditingName = true;
-                      });
-                    },
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            currentGroupName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.drive_file_rename_outline,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
-                    ),
+              ] else
+                IconButton(
+                  tooltip: L10n.of(context).bookshelfRenameFolder,
+                  icon: Icon(
+                    Icons.drive_file_rename_outline,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                // folder actions: equal-spaced icons in the top-right corner
-                _folderActionIcon(
-                  tooltip: L10n.of(context).bookshelfSort,
-                  icon: Icons.sort,
-                  onTap: _showSortMenu,
-                ),
-                _folderActionIcon(
-                  tooltip: isEditing
-                      ? L10n.of(context).commonCancel
-                      : L10n.of(context).commonEdit,
-                  icon: isEditing ? Icons.close : Icons.edit_outlined,
-                  onTap: () {
+                  onPressed: () {
                     setState(() {
-                      isEditing = !isEditing;
+                      isEditingName = true;
                     });
                   },
                 ),
-                _folderActionIcon(
-                  tooltip: L10n.of(context).commonDissolve,
-                  icon: Icons.call_split,
-                  onTap: () async {
-                    final l10n = L10n.of(context);
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        title: Text(l10n.commonDissolve),
-                        content: Text(l10n.bookshelfDissolveFolderConfirm(
-                            currentGroupName, books.length)),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, false),
-                            child: Text(l10n.commonCancel),
-                          ),
-                          FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, true),
-                            child: Text(l10n.commonConfirm),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true || !mounted) return;
-                    ref.read(bookListProvider.notifier).dissolveGroup(books);
-                    if (mounted) Navigator.pop(context);
-                  },
-                ),
-                _folderActionIcon(
-                  tooltip: L10n.of(context).bookshelfDeleteFolder,
-                  icon: Icons.delete_outline,
-                  color: Colors.red,
-                  onTap: () async {
-                    final l10n = L10n.of(context);
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        title: Text(l10n.bookshelfDeleteFolder),
-                        content: Text(l10n.bookshelfDeleteFolderConfirm(
-                            currentGroupName, books.length)),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, false),
-                            child: Text(l10n.commonCancel),
-                          ),
-                          FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, true),
-                            child: Text(l10n.commonDelete),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true || !mounted) return;
-                    ref.read(bookListProvider.notifier).dissolveGroup(books);
-                    if (mounted) Navigator.pop(context);
-                  },
-                ),
-              ],
-            ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // line 2: all folder actions as evenly spaced icons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _folderActionIcon(
+                tooltip: L10n.of(context).bookshelfNewFolder,
+                icon: Icons.create_new_folder_outlined,
+                onTap: _createSubFolder,
+              ),
+              _folderActionIcon(
+                tooltip: L10n.of(context).bookshelfSort,
+                icon: Icons.sort,
+                onTap: _showSortMenu,
+              ),
+              _folderActionIcon(
+                tooltip: isEditing
+                    ? L10n.of(context).commonCancel
+                    : L10n.of(context).commonEdit,
+                icon: isEditing ? Icons.close : Icons.edit_outlined,
+                onTap: () {
+                  setState(() {
+                    isEditing = !isEditing;
+                  });
+                },
+              ),
+              _folderActionIcon(
+                tooltip: L10n.of(context).commonDissolve,
+                icon: Icons.call_split,
+                onTap: () async {
+                  final l10n = L10n.of(context);
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: Text(l10n.commonDissolve),
+                      content: Text(l10n.bookshelfDissolveFolderConfirm(
+                          currentGroupName, books.length)),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: Text(l10n.commonCancel),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: Text(l10n.commonConfirm),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true || !mounted) return;
+                  ref.read(bookListProvider.notifier).dissolveGroup(books);
+                  if (mounted) Navigator.pop(context);
+                },
+              ),
+              _folderActionIcon(
+                tooltip: L10n.of(context).bookshelfDeleteFolder,
+                icon: Icons.delete_outline,
+                color: Colors.red,
+                onTap: () async {
+                  final l10n = L10n.of(context);
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: Text(l10n.bookshelfDeleteFolder),
+                      content: Text(l10n.bookshelfDeleteFolderConfirm(
+                          currentGroupName, books.length)),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: Text(l10n.commonCancel),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: Text(l10n.commonDelete),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true || !mounted) return;
+                  ref.read(bookListProvider.notifier).dissolveGroup(books);
+                  if (mounted) Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.7,
         child: Column(
@@ -442,17 +452,6 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                   (folder) => ActionChip(
                     label: Text(folder.name),
                     onPressed: () => _openSubFolder(folder),
-                  ),
-                ),
-                Tooltip(
-                  message: L10n.of(context).bookshelfNewFolder,
-                  child: ActionChip(
-                    avatar: const Icon(
-                      Icons.create_new_folder_outlined,
-                      size: 18,
-                    ),
-                    label: const SizedBox.shrink(),
-                    onPressed: _createSubFolder,
                   ),
                 ),
               ],
