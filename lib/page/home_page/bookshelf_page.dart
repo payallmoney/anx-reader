@@ -1050,15 +1050,20 @@ Future<void> resumeImportTask({
     final storedBasenames = rows
         .map((r) => ((r['file_path'] as String?) ?? '').split('/').last)
         .toSet();
-    for (final name in task.fileNames) {
-      if (storedBasenames.contains(name)) {
-        task.doneNames.add(name);
-      }
-    }
-    if (task.doneNames.isNotEmpty) {
-      AnxLog.info(
-          'Import resume: ${task.doneNames.length} files already present in "$subDir"');
-    }
+    // REBUILD the done set from the database (source of truth) instead of
+    // unioning with the persisted one: tasks created by the buggy pre-1.15.62
+    // reconciliation carried poisoned "done" entries (files skipped by
+    // library-wide basename matches) that would never otherwise be imported
+    final rebuilt = <String>{
+      for (final name in task.fileNames)
+        if (storedBasenames.contains(name)) name,
+    };
+    final poisoned = task.doneNames.difference(rebuilt).length;
+    task.doneNames
+      ..clear()
+      ..addAll(rebuilt);
+    AnxLog.info(
+        'Import resume: done set rebuilt - ${task.doneNames.length} already present in "$subDir", $poisoned stale entries purged');
     await PendingImport.save(task);
   } catch (e) {
     AnxLog.warning('Import resume: db sync of done names failed: $e');

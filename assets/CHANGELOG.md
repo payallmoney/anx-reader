@@ -1,3 +1,8 @@
+## 1.15.63
+- Fix(import)!: Purge poisoned "done" entries from interrupted-import tasks — tasks created before 1.15.62 carried wrongly-marked-done files (skipped by the library-wide basename match) that the new reconciliation never revisited, so those books stayed missing forever; on resume the done set is now rebuilt from scratch against the exact storage paths, healing old poisoned tasks automatically
+
+- Fix(导入)!: 清除中断任务里被污染的"已完成"记录——1.15.62 之前创建的任务带着错误标记的文件(被全库同名匹配跳过),新对账只增不清导致这些书永远缺失;恢复时"已完成"集合现在按精确存储路径整体重建,旧的中毒任务自动治愈
+
 ## 1.15.62
 - Fix(import)!: Importing a folder no longer silently skips files whose names match books elsewhere in the library — the resume reconciliation matched basenames across the whole library, so a 400-file import could lose a third of its books just because same-named files existed in other folders; matching is now by the exact storage path (file/<this folder>/<name>). Also logs a warning when a staged copy is about to be overwritten by a same-named file from flattened subfolders
 
