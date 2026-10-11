@@ -1,3 +1,8 @@
+## 1.15.66
+- Feat(bookshelf): The folder dialog's first line gains a close (X) button at the far right for dismissing the dialog without reaching the outside tap area
+
+- Feat(书架): 文件夹弹窗第一行右侧新增关闭(X)按钮,无需点弹窗外区域即可直接关闭
+
 ## 1.15.65
 - Feat(bookshelf): Folder dialog restructured per feedback — line 1 holds only the centered folder name with a rename button at its right; line 2 holds all actions as evenly spaced icons (new folder / sort / edit / dissolve / delete); the big "New folder" text chip is gone
 - Feat(书架): 文件夹弹窗按反馈重排——第一行仅保留居中的文件夹名与右侧改名按钮;第二行收纳全部操作图标(新建文件夹/排序/编辑/解散/删除)等距排列;原来的大号"新建文件夹"文字 chip 移除

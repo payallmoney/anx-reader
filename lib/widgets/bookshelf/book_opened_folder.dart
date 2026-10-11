@@ -348,6 +348,14 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
                     });
                   },
                 ),
+              if (isEditingName)
+                const SizedBox.shrink()
+              else
+                IconButton(
+                  tooltip: L10n.of(context).commonCancel,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
             ],
           ),
           const SizedBox(height: 4),
