@@ -1,3 +1,8 @@
+## 1.15.68
+- Feat(bookshelf): The multi-select bar gains move actions — a move icon opens a picker (shelf top / any folder / create-new-folder) and a new-folder icon creates a folder from the selected books directly; selection is cleared after moving
+
+- Feat(书架): 多选栏新增移动操作——移动图标打开选择器(书架顶层/任意文件夹/新建文件夹),新建文件夹图标可直接用所选书籍建新文件夹;移动完成后自动退出多选
+
 ## 1.15.67
 - Feat(bookshelf): Book cover titles allow up to 5 lines (was 3), so long titles show more before ellipsizing
 

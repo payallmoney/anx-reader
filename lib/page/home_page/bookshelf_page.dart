@@ -578,7 +578,124 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     // batch action bar shown instead of the filter bar while selecting
-    Widget buildSelectBar(List<List<Book>> books) {
+  /// Move every selected book into [targetGroupId] (null = shelf root).
+  Future<void> _moveSelectedTo(int? targetGroupId) async {
+    for (final id in _selectedBookIds.toList()) {
+      try {
+        final book = await bookDao.selectBookById(id);
+        await bookDao.updateBook(
+            book.copyWith(groupId: targetGroupId ?? 0, updateTime: DateTime.now()));
+      } catch (e) {
+        AnxLog.warning('multi move: book $id failed: $e');
+      }
+    }
+    try {
+      ref.read(groupDaoProvider.notifier).refresh();
+    } catch (_) {}
+    ref.read(bookListProvider.notifier).refresh();
+    _exitSelectMode();
+  }
+
+  /// Create a new shelf folder from the selected books.
+  Future<void> _newFolderFromSelected() async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(L10n.of(dialogContext).bookshelfNewFolder),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: L10n.of(dialogContext).bookshelfFolderNameHint,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(L10n.of(dialogContext).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, nameController.text),
+            child: Text(L10n.of(dialogContext).commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    final groupId = await ensureShelfFolder(name.trim());
+    if (groupId == null) return;
+    await _moveSelectedTo(groupId);
+  }
+
+  /// Picker: shelf root / every live folder / create-new-folder.
+  Future<void> _moveSelectedToFolder() async {
+    final groups = await ref.read(groupDaoProvider.future);
+    final l10n = L10n.of(context);
+    final target = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.bookshelfMoveToFolder),
+        children: [
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.shelves),
+            title: Text(l10n.bookshelfMoveToShelf),
+            onTap: () => Navigator.pop(dialogContext, 0),
+          ),
+          ...groups
+              .where((g) => g.id != 0)
+              .map((g) => ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.folder),
+                    title: Text(g.name),
+                    onTap: () => Navigator.pop(dialogContext, g.id),
+                  )),
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.create_new_folder_outlined),
+            title: Text(l10n.bookshelfNewSubFolder),
+            onTap: () => Navigator.pop(dialogContext, -1),
+          ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+    if (target == -1) {
+      final nameController = TextEditingController();
+      final name = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(L10n.of(dialogContext).bookshelfNewFolder),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: L10n.of(dialogContext).bookshelfFolderNameHint,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(L10n.of(dialogContext).commonCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, nameController.text),
+              child: Text(L10n.of(dialogContext).commonConfirm),
+            ),
+          ],
+        ),
+      );
+      if (name == null || name.trim().isEmpty || !mounted) return;
+      final groupId = await ensureShelfFolder(name.trim());
+      if (groupId == null) return;
+      await _moveSelectedTo(groupId);
+      return;
+    }
+    await _moveSelectedTo(target);
+  }
+
+  Widget buildSelectBar(List<List<Book>> books) {
       final allBookIds = books
           .expand((group) => group)
           .map((book) => book.id)
@@ -613,6 +730,20 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
                   }
                 });
               },
+            ),
+            IconButton(
+              icon: const Icon(Icons.drive_file_move_outline, size: 22),
+              tooltip: L10n.of(context).bookshelfMoveToFolder,
+              onPressed: _selectedBookIds.isEmpty
+                  ? null
+                  : _moveSelectedToFolder,
+            ),
+            IconButton(
+              icon: const Icon(Icons.create_new_folder_outlined, size: 22),
+              tooltip: L10n.of(context).bookshelfNewFolder,
+              onPressed: _selectedBookIds.isEmpty
+                  ? null
+                  : _newFolderFromSelected,
             ),
             IconButton(
               icon: const Icon(EvaIcons.trash_2_outline, size: 22),
