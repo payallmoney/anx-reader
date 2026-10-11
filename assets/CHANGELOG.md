@@ -1,3 +1,8 @@
+## 1.15.62
+- Fix(import)!: Importing a folder no longer silently skips files whose names match books elsewhere in the library — the resume reconciliation matched basenames across the whole library, so a 400-file import could lose a third of its books just because same-named files existed in other folders; matching is now by the exact storage path (file/<this folder>/<name>). Also logs a warning when a staged copy is about to be overwritten by a same-named file from flattened subfolders
+
+- Fix(导入)!: 导入文件夹不再静默跳过与书库其它位置同名的文件——恢复对账此前按文件名匹配整个书库,只要其它文件夹里有同名书,400 本的导入就可能因此丢掉近三分之一;现在按精确存储路径(file/<本目录>/<文件名>)匹配。另外当扁平化的子目录出现同名文件互相覆盖时记录警告日志
+
 ## 1.15.61
 - Fix(import): The persistent progress notification was invisible on Android 13+ — the POST_NOTIFICATIONS runtime permission was never requested, so the system hid the foreground-service notification entirely. Starting an import now asks for the permission first (dialog appears once) and only then starts the service, so the notification shows from the very first book
 

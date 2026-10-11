@@ -1035,15 +1035,18 @@ Future<void> resumeImportTask({
   await Directory(destDir).create(recursive: true);
   groupId ??= await ensureShelfFolder(task.subDirName);
 
-  // resume-specific: rebuild doneNames from the database so already-
-  // imported books (any prior run) are skipped WITHOUT spawning a webview
-  // — a webview per already-present book both wastes ~3s each and, worse,
-  // concurrent metadata extractions overwrite the shared import temp file
-  // (Server.setTempFile is a singleton), stalling the whole queue
+  // resume-specific: rebuild doneNames from the database so books of THIS
+  // exact import directory that were already imported (any prior run) are
+  // skipped WITHOUT spawning a webview. Matching is by the full storage
+  // path (file/<this folder>/<name>) — matching basenames across the whole
+  // library silently skipped same-named books from different folders
+  // (a 400-file import could lose a third of its files this way)
   try {
     final db = await DBHelper().database;
     final rows = await db.query('tb_books',
-        where: 'is_deleted = 0', columns: ['file_path']);
+        where: 'is_deleted = 0 AND file_path LIKE ?',
+        whereArgs: ['$subDir/%'],
+        columns: ['file_path']);
     final storedBasenames = rows
         .map((r) => ((r['file_path'] as String?) ?? '').split('/').last)
         .toSet();
@@ -1051,6 +1054,10 @@ Future<void> resumeImportTask({
       if (storedBasenames.contains(name)) {
         task.doneNames.add(name);
       }
+    }
+    if (task.doneNames.isNotEmpty) {
+      AnxLog.info(
+          'Import resume: ${task.doneNames.length} files already present in "$subDir"');
     }
     await PendingImport.save(task);
   } catch (e) {
@@ -1088,6 +1095,12 @@ Future<void> resumeImportTask({
         String stagedPath;
         String? md5;
         final existing = File('$destDir/${entry.name}');
+        if (existing.existsSync() && existing.lengthSync() != entry.size) {
+          // same-name collision from flattened subfolders: the staged copy
+          // belongs to a different source file and will be overwritten
+          AnxLog.warning(
+              'Import: staged ${entry.name} has a different size - overwriting (duplicate basename in subfolders?)');
+        }
         if (existing.existsSync() && existing.lengthSync() == entry.size) {
           // already copied by a previous run — import the staged copy as-is
           stagedPath = existing.path;
