@@ -364,6 +364,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   DartEpubTts? _dartTtsFallback;
   String? _lastTtsSentence;
   int _fallbackPersistCounter = 0;
+  DateTime _lastFollowNav = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Persist the narration position to the book record.
   Future<void> _persistNarrationProgress() async {
@@ -401,6 +402,15 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         _fallbackPersistCounter++;
         if (_fallbackPersistCounter % 10 == 0) {
           unawaited(_persistNarrationProgress());
+        }
+        // keep the visible page following the narration: jump at most once
+        // per 15s and only while the app is foregrounded (a frozen webview
+        // would queue the commands and replay them all on thaw)
+        if (WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed &&
+            DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
+          _lastFollowNav = DateTime.now();
+          await goToPercentage(percentage);
         }
       }
       return s;
@@ -796,6 +806,13 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     controller.addJavaScriptHandler(
         handlerName: 'onLoadEnd',
         callback: (args) {
+          // narration-progress saves clear lastReadPosition (the webview
+          // cfi is stale); an empty cfi makes the JS open() start at the
+          // first line — restore by the saved percentage here instead
+          if ((widget.cfi ?? widget.book.lastReadPosition).isEmpty &&
+              widget.book.readingPercentage > 0) {
+            goToPercentage(widget.book.readingPercentage);
+          }
           widget.onLoadEnd();
         });
 

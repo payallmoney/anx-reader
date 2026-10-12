@@ -1,3 +1,8 @@
+## 1.15.71
+- Fix(tts): The reader now follows the narrated position on screen (the page repositions up to once per 15s while narration runs), and reopening a book whose progress was saved during narration restores at the narrated position by percentage instead of jumping to the first line (the JS open() ignores an empty cfi — the app now jumps to the saved percentage after load)
+
+- Fix(朗读): 朗读时阅读页会跟随朗读位置(每最多 15 秒重定位一次,仅前台时);重新打开书籍时按保存的百分比恢复到朗读位置,而不是跳回第一行(JS open() 会忽略空 cfi——app 现在在加载完成后按已存百分比跳转)
+
 ## 1.15.70
 - Fix(tts): The UI now keeps up with screen-off narration — each persisted narration position also refreshes the shelf (percentages update live), and the wake-sync repeats the position jump once after the webview has thawed (the first command could be lost while the renderer was still resuming)
 
