@@ -169,8 +169,11 @@ class DartEpubTts {
     if (hrefs.isEmpty) return null;
 
     final sentences = <String>[];
+    final sentenceSection = <int>[];
+    final sentenceChapterFrac = <double>[];
     final cum = <int>[0];
-    for (final href in hrefs) {
+    for (var spineIdx = 0; spineIdx < hrefs.length; spineIdx++) {
+      final href = hrefs[spineIdx];
       final full = opfDir.isEmpty ? href : '$opfDir/$href';
       final data = _archiveFile(archive, full);
       if (data == null) continue;
@@ -180,9 +183,17 @@ class DartEpubTts {
       for (final s in chapterSentences) {
         chars += s.length;
       }
+      var before = 0;
+      for (final s in chapterSentences) {
+        sentenceSection.add(spineIdx);
+        sentenceChapterFrac.add(chars > 0 ? before / chars : 0.0);
+        before += s.length;
+      }
       sentences.addAll(chapterSentences);
       cum.add(cum.last + chars);
     }
+    _sentenceSection = sentenceSection;
+    _sentenceChapterFrac = sentenceChapterFrac;
     if (sentences.isEmpty) return null;
     _cachedSentences = sentences;
     _cachedBookPath = bookPath;
@@ -206,6 +217,18 @@ class DartEpubTts {
   /// Position as a fraction weighted by chapter text length — the same
   /// measure the reader's goToFraction uses (sentence-count fractions drift
   /// badly when chapters have very different lengths)
+  /// (spine index, fraction within that chapter) of the last spoken
+  /// sentence — lets the reader jump natively via goTo({index, anchor})
+  /// with zero cross-measure conversion
+  (int, double) currentSectionPosition() {
+    if (_sentences.isEmpty) return (0, 0.0);
+    final i = (_index - 1).clamp(0, _sentences.length - 1);
+    if (i >= _sentenceSection.length || i >= _sentenceChapterFrac.length) {
+      return (0, 0.0);
+    }
+    return (_sentenceSection[i], _sentenceChapterFrac[i]);
+  }
+
   double get positionFraction {
     if (_sentences.isEmpty || _totalChars == 0) return 0;
     final i = _index.clamp(0, _sentences.length);
@@ -237,12 +260,16 @@ class DartEpubTts {
     _syncedBookPath = null;
     _cumChars = const [0];
     _totalChars = 0;
+    _sentenceSection = const [];
+    _sentenceChapterFrac = const [];
   }
 
   static List<String>? _cachedSentences;
   static String? _cachedBookPath;
   static List<int> _cumChars = const [0];
   static int _totalChars = 0;
+  static List<int> _sentenceSection = const [];
+  static List<double> _sentenceChapterFrac = const [];
 }
 
 List<int>? _archiveFile(Archive archive, String path) {

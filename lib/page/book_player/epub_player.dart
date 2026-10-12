@@ -151,6 +151,13 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       ''');
   }
 
+  /// Jump to a spine section at a fraction within it — the exact same
+  /// resolution foliate uses internally, no cross-measure conversion
+  void goToSectionFraction(int index, double frac) {
+    webViewController.execute(
+        'reader.view.goTo({ index: $index, anchor: { fraction: $frac } })');
+  }
+
   Future<void> goToPercentage(double value) async {
     await webViewController.execute('''
       goToPercent($value); 
@@ -410,7 +417,8 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
                 AppLifecycleState.resumed &&
             DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
           _lastFollowNav = DateTime.now();
-          await goToPercentage(percentage);
+          final (sec, frac) = _dartTtsFallback!.currentSectionPosition();
+          goToSectionFraction(sec, frac);
         }
       }
       return s;
@@ -1196,12 +1204,14 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       if (fraction > 0 && (fraction - percentage).abs() > 0.001) {
         AnxLog.info(
             'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
-        await goToPercentage(fraction);
+        final (sec, frac) = fallback.currentSectionPosition();
+        goToSectionFraction(sec, frac);
         // the webview may still be thawing when the first command lands —
         // repeat once after it has had time to resume
         await Future<void>.delayed(const Duration(seconds: 3));
-        if (mounted && (fallback.positionFraction - percentage).abs() > 0.001) {
-          await goToPercentage(fallback.positionFraction);
+        if (mounted) {
+          final (sec2, frac2) = fallback.currentSectionPosition();
+          goToSectionFraction(sec2, frac2);
         }
       }
       final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;

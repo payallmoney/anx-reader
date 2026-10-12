@@ -1,3 +1,8 @@
+## 1.15.73
+- Fix(tts)!: Narration position jumps now use the spine section index plus the within-chapter fraction straight from the fallback's parse — zero cross-measure conversion. The previous char-weighted percentage still drifted against the reader's own section weighting (landing on chapter first-pages that froze the follow); foliate's native goTo({index, anchor}) is the exact same resolution the reader itself uses, so jumps always land on the narrated content
+
+- Fix(朗读)!: 朗读位置跳转改用兜底解析自带的"章节索引+章内偏移"直接定位——零换算误差。此前按字数加权的百分比仍与阅读器自身章节权重有偏差(跳到某些章节的第一页导致跟随冻结);现改用 foliate 原生 goTo({index, anchor}) 与阅读器完全相同的定位方式,跳转必落在朗读内容处
+
 ## 1.15.72
 - Fix(tts): The narration position jump now lands where narration actually is — the fallback's fraction counted every sentence equally while the reader weights position by chapter text length, so with chapters of differing lengths the jump drifted further and further off (completely mismatched after long sessions). The fallback now tracks cumulative chapter character counts and reports position on the same measure the reader uses
 
