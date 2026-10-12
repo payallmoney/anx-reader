@@ -1,3 +1,8 @@
+## 1.15.74
+- Fix(reader): Rapid page taps no longer skip whole chapters — the paginator's re-entry lock had been commented out, so concurrent page turns at a chapter boundary each crossed another section (previous page becoming previous chapter, next becoming next chapter). The lock is restored with a one-tap queue: rapid taps stay responsive but can never multi-jump. Applies to taps, edge swipes and TTS auto-advance alike
+
+- Fix(阅读): 快速点击翻页不再整章跳跃——分页器的防重入锁此前被注释,章节边界处并发的翻页各自判定"在章节边缘"而连续跨章(上一页变上一章、下一页变下一章);现已恢复锁并保留一次点击排队,快速点击仍有响应但绝不会多跳
+
 ## 1.15.73
 - Fix(tts)!: Narration position jumps now use the spine section index plus the within-chapter fraction straight from the fallback's parse — zero cross-measure conversion. The previous char-weighted percentage still drifted against the reader's own section weighting (landing on chapter first-pages that froze the follow); foliate's native goTo({index, anchor}) is the exact same resolution the reader itself uses, so jumps always land on the narrated content
 

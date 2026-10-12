@@ -429,6 +429,7 @@ export class Paginator extends HTMLElement {
   #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
   #justAnchored = false
   #locked = false // while true, prevent any further navigation
+  #pendingTurn = null // one queued turn so rapid taps stay responsive
   #styles
   #styleMap = new WeakMap()
   #mediaQuery = matchMedia('(prefers-color-scheme: dark)')
@@ -1307,7 +1308,14 @@ export class Paginator extends HTMLElement {
       if (this.sections[index]?.linear !== 'no') return index
   }
   async #turnPage(dir, distance) {
-    // if (this.#locked) return
+    // the lock is essential: rapid taps at a chapter boundary used to run
+    // concurrent turns, each seeing "at chapter edge" and crossing another
+    // chapter (previous/next page becoming previous/next CHAPTER).
+    // One tap is queued so fast tapping stays responsive.
+    if (this.#locked) {
+      this.#pendingTurn = dir
+      return
+    }
     this.#locked = true
     const prev = dir === -1
     const shouldGo = await (prev ? this.#scrollPrev(distance) : this.#scrollNext(distance))
@@ -1318,6 +1326,11 @@ export class Paginator extends HTMLElement {
     })
     if (shouldGo || !this.hasAttribute('animated')) await wait(100)
     this.#locked = false
+    if (this.#pendingTurn != null) {
+      const pendingDir = this.#pendingTurn
+      this.#pendingTurn = null
+      await this.#turnPage(pendingDir, distance)
+    }
   }
   prev(distance) {
     return this.#turnPage(-1, distance)
