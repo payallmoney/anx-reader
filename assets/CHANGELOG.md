@@ -1,3 +1,8 @@
+## 1.15.75
+- Fix(tts): The narration-follow jump used an unsupported anchor format ({fraction: x} object) — the paginator only accepts a bare number as the in-section fraction; with an object anchor the jump landed on the section's first page and every subsequent jump repeated it (position stuck). The anchor is now the bare fraction
+
+- Fix(朗读): 朗读跟随跳转使用了不支持的锚点格式({fraction: x} 对象)——分页器只接受裸数字作为章内比例;对象锚点导致跳转落到章节第一页且后续跳转重复同一处(位置卡住)。已改为裸数字锚点
+
 ## 1.15.74
 - Fix(reader): Rapid page taps no longer skip whole chapters — the paginator's re-entry lock had been commented out, so concurrent page turns at a chapter boundary each crossed another section (previous page becoming previous chapter, next becoming next chapter). The lock is restored with a one-tap queue: rapid taps stay responsive but can never multi-jump. Applies to taps, edge swipes and TTS auto-advance alike
 

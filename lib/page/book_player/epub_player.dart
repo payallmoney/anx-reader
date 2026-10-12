@@ -154,8 +154,11 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   /// Jump to a spine section at a fraction within it — the exact same
   /// resolution foliate uses internally, no cross-measure conversion
   void goToSectionFraction(int index, double frac) {
-    webViewController.execute(
-        'reader.view.goTo({ index: $index, anchor: { fraction: $frac } })');
+    final f = frac.clamp(0.0, 1.0).toStringAsFixed(4);
+    // anchor must be a BARE NUMBER (fraction within the section) — the
+    // paginator scrolls to anchor*(pages-1); an object lands nowhere
+    webViewController
+        .execute('reader.view.goTo({ index: $index, anchor: $f })');
   }
 
   Future<void> goToPercentage(double value) async {
