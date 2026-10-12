@@ -383,8 +383,14 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       if (frac <= 0) return;
       percentage = frac;
       final fresh = await bookDao.selectBookById(book.id);
-      await bookDao.updateBook(
-          fresh.copyWith(readingPercentage: frac, updateTime: DateTime.now()));
+      // ALSO clear the stale webview cfi here: if the process dies during
+      // screen-off, saveReadingProgress never runs, and a non-empty cfi
+      // makes the player restore at the old page (ignoring the saved
+      // percentage) - exactly the "reopens in an earlier chapter" bug
+      await bookDao.updateBook(fresh.copyWith(
+          readingPercentage: frac,
+          lastReadPosition: '',
+          updateTime: DateTime.now()));
       // keep the shelf percentage in step with narration
       if (mounted) {
         ref.read(bookListProvider.notifier).refresh();

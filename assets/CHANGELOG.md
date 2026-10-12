@@ -1,3 +1,8 @@
+## 1.15.77
+- Fix(tts): The narration-position persist also clears the stale webview cfi — previously it updated only the percentage while the old cfi stayed, so after the system killed a screen-off session the player restored from the OLD cfi (an earlier chapter position) and ignored the saved percentage. Verified: percentage and cfi now advance together during narration and reopening lands at the narrated position
+
+- Fix(朗读): 朗读位置持久化时同步清除过期的 WebView cfi——此前只更新百分比而旧 cfi 原样保留,系统在息屏中途杀掉应用后,播放器按旧 cfi 恢复(落在前面章节的旧位置),忽略了已保存的百分比。已验证:朗读中百分比与 cfi 同步推进,重开落在朗读位置
+
 ## 1.15.76
 - Feat(tts): Narration-follow now restores the original progress scheme precisely — when the reader is visible, the current sentence is located via in-book search (real cfi), then highlighted and navigated to, so the webview reports progress events and cfi/percentage persist through the standard path; the rough section jump remains as fallback when the sentence cannot be located
 
