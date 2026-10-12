@@ -1,3 +1,8 @@
+## 1.15.69
+- Fix(tts): Screen-off narration now persists its progress to the book record — the Dart fallback advances sentence by sentence without the frozen webview, so the saved position never moved and reopening the app showed the pre-screen-off page; narration position is saved every ~10 sentences (percentage-based, stale cfi cleared) and on stop/reopen the reader restores at the narrated position
+
+- Fix(朗读): 息屏朗读的进度现在会写入书籍记录——Dart 兜底逐句推进时冻结的 WebView 不再触发进度事件,保存的位置永远停在熄屏前;现在每约 10 句保存一次朗读位置(按百分比,清除过期 cfi),停止或重开时阅读页恢复到朗读到的位置
+
 ## 1.15.68
 - Feat(bookshelf): The multi-select bar gains move actions — a move icon opens a picker (shelf top / any folder / create-new-folder) and a new-folder icon creates a folder from the selected books directly; selection is cleared after moving
 

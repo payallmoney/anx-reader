@@ -363,6 +363,21 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   DartEpubTts? _dartTtsFallback;
   String? _lastTtsSentence;
+  int _fallbackPersistCounter = 0;
+
+  /// Persist the narration position to the book record.
+  Future<void> _persistNarrationProgress() async {
+    try {
+      final frac = _dartTtsFallback?.positionFraction ?? 0;
+      if (frac <= 0) return;
+      percentage = frac;
+      final fresh = await bookDao.selectBookById(book.id);
+      await bookDao.updateBook(
+          fresh.copyWith(readingPercentage: frac, updateTime: DateTime.now()));
+    } catch (e) {
+      AnxLog.warning('Narration progress persist failed: $e');
+    }
+  }
 
   /// Test hook: when true the WebView call is forced to time out so the
   /// pure-Dart fallback path can be verified on an emulator.
@@ -373,7 +388,17 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     if (_dartTtsFallback != null) {
       final s = _dartTtsFallback!.next();
       AnxLog.info('TTS ttsNext (dart fallback), ${s.length} chars');
-      if (s.isNotEmpty) _lastTtsSentence = s;
+      if (s.isNotEmpty) {
+        _lastTtsSentence = s;
+        // keep the book record's progress in sync: the frozen webview never
+        // fires progress events, so without this the saved position stays
+        // where the screen turned off even after hours of narration
+        percentage = _dartTtsFallback!.positionFraction;
+        _fallbackPersistCounter++;
+        if (_fallbackPersistCounter % 10 == 0) {
+          unawaited(_persistNarrationProgress());
+        }
+      }
       return s;
     }
 
@@ -1106,8 +1131,21 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   }
 
   Future<void> saveReadingProgress() async {
+    // narration fallback: the webview's cfi is stale — persist by
+    // percentage and clear lastReadPosition so reopening restores at the
+    // narrated position instead of the pre-screen-off page
+    if (_dartTtsFallback != null) {
+      final frac = _dartTtsFallback!.positionFraction;
+      if (frac > 0) {
+        percentage = frac;
+        final fresh = await bookDao.selectBookById(this.book.id);
+        await bookDao.updateBook(
+            fresh.copyWith(readingPercentage: frac, lastReadPosition: ''));
+      }
+      return;
+    }
     if (cfi == '' || widget.cfi != null) return;
-    Book book = widget.book;
+    final Book book = widget.book;
     book.lastReadPosition = cfi;
     book.readingPercentage = percentage;
     await bookDao.updateBook(book);
