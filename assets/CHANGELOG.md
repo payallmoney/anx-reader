@@ -1,3 +1,8 @@
+## 1.15.76
+- Feat(tts): Narration-follow now restores the original progress scheme precisely — when the reader is visible, the current sentence is located via in-book search (real cfi), then highlighted and navigated to, so the webview reports progress events and cfi/percentage persist through the standard path; the rough section jump remains as fallback when the sentence cannot be located
+
+- Feat(朗读): 朗读跟随现在精确还原原有进度方案——阅读页可见时通过书内搜索定位当前朗读句的真实 cfi,高亮并跳转,WebView 随之报告进度事件,cfi/百分比按标准路径持续保存;无法定位句子时仍退回粗粒度的章节跳转
+
 ## 1.15.75
 - Fix(tts): The narration-follow jump used an unsupported anchor format ({fraction: x} object) — the paginator only accepts a bare number as the in-section fraction; with an object anchor the jump landed on the section's first page and every subsequent jump repeated it (position stuck). The anchor is now the bare fraction
 

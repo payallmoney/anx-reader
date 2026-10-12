@@ -420,8 +420,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
                 AppLifecycleState.resumed &&
             DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
           _lastFollowNav = DateTime.now();
-          final (sec, frac) = _dartTtsFallback!.currentSectionPosition();
-          goToSectionFraction(sec, frac);
+          unawaited(_followNarration());
         }
       }
       return s;
@@ -1186,6 +1185,36 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     }
   }
 
+
+  /// Make the visible page reflect the narrated position AND restore the
+  /// original progress scheme: search the current sentence to get its real
+  /// cfi, navigate + highlight — the webview then reports progress events
+  /// (onRelocated) so cfi/percentage flow naturally. Falls back to a rough
+  /// section jump when the sentence cannot be located.
+  Future<void> _followNarration() async {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
+    final (sec, frac) = fallback.currentSectionPosition();
+    final sentence = _lastTtsSentence;
+    if (sentence == null || sentence.trim().isEmpty) {
+      goToSectionFraction(sec, frac);
+      return;
+    }
+    try {
+      final t = jsonEncode(sentence);
+      final r = await webViewController.callAsyncJavaScript(
+        functionBody: 'return await ttsLocate($t, $sec)',
+      );
+      final cfi = _jsString(r);
+      if (cfi.isNotEmpty) {
+        await ttsHighlightByCfi(cfi);
+        goToCfi(cfi);
+        return;
+      }
+    } catch (_) {}
+    goToSectionFraction(sec, frac);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -1207,14 +1236,12 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       if (fraction > 0 && (fraction - percentage).abs() > 0.001) {
         AnxLog.info(
             'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
-        final (sec, frac) = fallback.currentSectionPosition();
-        goToSectionFraction(sec, frac);
+        await _followNarration();
         // the webview may still be thawing when the first command lands —
         // repeat once after it has had time to resume
         await Future<void>.delayed(const Duration(seconds: 3));
         if (mounted) {
-          final (sec2, frac2) = fallback.currentSectionPosition();
-          goToSectionFraction(sec2, frac2);
+          await _followNarration();
         }
       }
       final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;

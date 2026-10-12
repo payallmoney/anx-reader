@@ -2019,6 +2019,26 @@ window.goToCfi = cfi => reader.view.goTo(cfi)
 
 window.goToPercent = percent => reader.view.goToFraction(percent)
 
+// locate a sentence and return its cfi (used by screen-off narration
+// follow: the Dart fallback knows only plain text, the webview provides
+// the precise cfi so the original progress/highlight scheme applies)
+window.ttsLocate = async (text, index) => {
+  const query = (text || '').trim()
+  if (!query) return null
+  try {
+    for await (const result of reader.view.search({
+      query,
+      index,
+      matchCase: false,
+      matchDiacritics: false,
+      matchWholeWords: false,
+    })) {
+      if (result && result.cfi) return result.cfi
+    }
+  } catch (e) { /* section missing */ }
+  return null
+}
+
 window.nextPage = () => reader.view.next()
 
 window.prevPage = () => reader.view.prev()
