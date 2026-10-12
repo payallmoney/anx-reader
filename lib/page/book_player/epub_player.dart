@@ -374,6 +374,10 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       final fresh = await bookDao.selectBookById(book.id);
       await bookDao.updateBook(
           fresh.copyWith(readingPercentage: frac, updateTime: DateTime.now()));
+      // keep the shelf percentage in step with narration
+      if (mounted) {
+        ref.read(bookListProvider.notifier).refresh();
+      }
     } catch (e) {
       AnxLog.warning('Narration progress persist failed: $e');
     }
@@ -1176,6 +1180,12 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         AnxLog.info(
             'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
         await goToPercentage(fraction);
+        // the webview may still be thawing when the first command lands —
+        // repeat once after it has had time to resume
+        await Future<void>.delayed(const Duration(seconds: 3));
+        if (mounted && (fallback.positionFraction - percentage).abs() > 0.001) {
+          await goToPercentage(fallback.positionFraction);
+        }
       }
       final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;
       if (!playing &&

@@ -1,3 +1,8 @@
+## 1.15.70
+- Fix(tts): The UI now keeps up with screen-off narration — each persisted narration position also refreshes the shelf (percentages update live), and the wake-sync repeats the position jump once after the webview has thawed (the first command could be lost while the renderer was still resuming)
+
+- Fix(朗读): 界面进度跟上息屏朗读——每次持久化朗读位置同时刷新书架(百分比实时更新);亮屏同步会在 WebView 解冻后补发一次定位跳转,避免第一条指令在渲染器恢复期间丢失
+
 ## 1.15.69
 - Fix(tts): Screen-off narration now persists its progress to the book record — the Dart fallback advances sentence by sentence without the frozen webview, so the saved position never moved and reopening the app showed the pre-screen-off page; narration position is saved every ~10 sentences (percentage-based, stale cfi cleared) and on stop/reopen the reader restores at the narrated position
 
