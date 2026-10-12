@@ -1,3 +1,8 @@
+## 1.15.72
+- Fix(tts): The narration position jump now lands where narration actually is — the fallback's fraction counted every sentence equally while the reader weights position by chapter text length, so with chapters of differing lengths the jump drifted further and further off (completely mismatched after long sessions). The fallback now tracks cumulative chapter character counts and reports position on the same measure the reader uses
+
+- Fix(朗读): 朗读位置跳转现在能落在朗读真实所在处——兜底的百分比此前按“第几句/总句数”平摊,而阅读器按章节字数加权定位,章节长短不一时跳转位置越读越偏;兜底现在按章节累计字数计算百分比,与阅读器使用同一度量
+
 ## 1.15.71
 - Fix(tts): The reader now follows the narrated position on screen (the page repositions up to once per 15s while narration runs), and reopening a book whose progress was saved during narration restores at the narrated position by percentage instead of jumping to the first line (the JS open() ignores an empty cfi — the app now jumps to the saved percentage after load)
 

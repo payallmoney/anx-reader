@@ -169,16 +169,25 @@ class DartEpubTts {
     if (hrefs.isEmpty) return null;
 
     final sentences = <String>[];
+    final cum = <int>[0];
     for (final href in hrefs) {
       final full = opfDir.isEmpty ? href : '$opfDir/$href';
       final data = _archiveFile(archive, full);
       if (data == null) continue;
       final html = utf8.decode(data, allowMalformed: true);
-      sentences.addAll(_splitChapter(html));
+      final chapterSentences = _splitChapter(html);
+      var chars = 0;
+      for (final s in chapterSentences) {
+        chars += s.length;
+      }
+      sentences.addAll(chapterSentences);
+      cum.add(cum.last + chars);
     }
     if (sentences.isEmpty) return null;
     _cachedSentences = sentences;
     _cachedBookPath = bookPath;
+    _cumChars = cum;
+    _totalChars = cum.last;
     return sentences;
   }
 
@@ -194,8 +203,14 @@ class DartEpubTts {
   /// reader UI back to the spoken position when the screen wakes (the
   /// fallback narrates without touching the frozen webview, so the visible
   /// page would otherwise stay where the screen turned off).
-  double get positionFraction =>
-      _sentences.isEmpty ? 0 : (_index / _sentences.length).clamp(0.0, 1.0);
+  /// Position as a fraction weighted by chapter text length — the same
+  /// measure the reader's goToFraction uses (sentence-count fractions drift
+  /// badly when chapters have very different lengths)
+  double get positionFraction {
+    if (_sentences.isEmpty || _totalChars == 0) return 0;
+    final i = _index.clamp(0, _sentences.length);
+    return (_cumChars[i] / _totalChars).clamp(0.0, 1.0);
+  }
 
   /// Peek at upcoming sentences without advancing the cursor; used by the
   /// online-TTS prefetcher when the WebView is frozen. Each sentence gets a
@@ -220,10 +235,14 @@ class DartEpubTts {
     _cachedBookPath = null;
     _syncedIndex = 0;
     _syncedBookPath = null;
+    _cumChars = const [0];
+    _totalChars = 0;
   }
 
   static List<String>? _cachedSentences;
   static String? _cachedBookPath;
+  static List<int> _cumChars = const [0];
+  static int _totalChars = 0;
 }
 
 List<int>? _archiveFile(Archive archive, String path) {
