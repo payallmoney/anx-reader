@@ -1,3 +1,8 @@
+## 1.15.79
+- Fix(tts)!: Restore the on-screen narration follow, now structurally incapable of the chapter-one regression — the follow jump is driven solely by the fallback's own monotonic position (spine index + in-chapter fraction, bare-number anchor) and never by text search, so it can only move forward through the book. The text-search locate path (which matched early duplicates and caused the chapter-one returns) is no longer used for positioning
+
+- Fix(朗读)!: 恢复界面跟随朗读,且从机制上杜绝"回到第一章"——跟随跳转仅由兜底解析自身的单调位置(章节索引+章内比例,裸数字锚点)驱动,绝不使用文本搜索定位(文本搜索会匹配到前文重复句而跳回第一章)
+
 ## 1.15.78
 - Fix(tts)!: Completely removed the automatic narration-follow / position-jump machinery (added in 1.15.71-76) — it was the source of the "narration returns to chapter one" regressions. Screen-off narration now behaves predictably: it keeps reading with the screen off and saves its position to the book as it goes; the visible page simply stays where it is. When you reopen the book (or stop and reopen), it opens at the narrated position via the saved percentage. No automatic page jumps means no wrong jumps
 

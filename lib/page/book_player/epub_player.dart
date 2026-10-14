@@ -82,7 +82,7 @@ class EpubPlayer extends ConsumerStatefulWidget {
 }
 
 class EpubPlayerState extends ConsumerState<EpubPlayer>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late EpubWebViewController webViewController;
   late ContextMenu contextMenu;
   String cfi = '';
@@ -365,6 +365,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   DartEpubTts? _dartTtsFallback;
   String? _lastTtsSentence;
   int _fallbackPersistCounter = 0;
+  DateTime _lastFollowNav = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Persist the narration position to the book record.
   Future<void> _persistNarrationProgress() async {
@@ -402,6 +403,15 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         _fallbackPersistCounter++;
         if (_fallbackPersistCounter % 10 == 0) {
           unawaited(_persistNarrationProgress());
+        }
+        // follow the narration on screen (foreground only), at most one
+        // reposition per 15s — driven by the fallback's own monotonic
+        // position, never by text search
+        if (WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed &&
+            DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
+          _lastFollowNav = DateTime.now();
+          _followNarration();
         }
       }
       return s;
@@ -1111,6 +1121,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     // pauses while this page lives (import webviews otherwise compete for
     // the main thread and make reading stutter)
     ImportReadingGate.reading = true;
+    WidgetsBinding.instance.addObserver(this);
     getThemeColor();
 
     contextMenu = ContextMenu(
@@ -1170,8 +1181,56 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncReaderToNarration();
+    }
+  }
+
+  /// Wake/reopen: put the visible page at the narrated position. The jump
+  /// is driven by the fallback's own monotonic position (section index +
+  /// in-chapter fraction) — it can only move forward, so a wrong jump back
+  /// to chapter one is structurally impossible.
+  Future<void> _syncReaderToNarration() async {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
+    try {
+      final (sec, frac) = fallback.currentSectionPosition();
+      goToSectionFraction(sec, frac);
+      // the webview may still be thawing when the first command lands —
+      // repeat once after it has had time to resume
+      await Future<void>.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        final (sec2, frac2) = fallback.currentSectionPosition();
+        goToSectionFraction(sec2, frac2);
+      }
+    } catch (e) {
+      AnxLog.warning('Narration follow failed: $e');
+    }
+  }
+
+  /// While narrating with the app foregrounded, keep the visible page on
+  /// the narrated content: at most one reposition per 15s.
+  void _followNarration() {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
+    final (sec, frac) = fallback.currentSectionPosition();
+    goToSectionFraction(sec, frac);
+  }
+
+  /// Jump to a spine section at a fraction within it — foliate's native
+  /// resolution; the anchor must be a BARE NUMBER (fraction within the
+  /// section): an object anchor lands nowhere.
+  void goToSectionFraction(int index, double frac) {
+    final f = frac.clamp(0.0, 1.0).toStringAsFixed(4);
+    webViewController
+        .execute('reader.view.goTo({ index: $index, anchor: $f })');
+  }
+
+  @override
   void dispose() {
     ImportReadingGate.reading = false;
+    WidgetsBinding.instance.removeObserver(this);
     _scrollDebounceTimer?.cancel();
     _animationController?.dispose();
     saveReadingProgress();
