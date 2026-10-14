@@ -311,6 +311,16 @@ class SystemTts extends BaseTts {
     }
   }
 
+  /// Immediate recovery attempt (used when the screen wakes): resets the
+  /// engine and re-speaks the current sentence if the chain stalled.
+  Future<void> recoverIfStalled() async {
+    if (ttsStateNotifier.value != TtsStateEnum.playing) return;
+    final idle = DateTime.now().difference(_lastUtteranceEvent).inSeconds;
+    if (idle < 10) return;
+    AnxLog.severe('TTS kickstart: stalled ${idle}s on wake, recovering');
+    await _recoverFromStall();
+  }
+
   @override
   Future<dynamic> stop() async {
     updateTtsState(TtsStateEnum.stopped);

@@ -1215,6 +1215,9 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _syncReaderToNarration();
+      // immediate recovery attempt: don't wait for the 30s watchdog after
+      // a long doze
+      TtsHandler().recoverIfStalled();
     }
   }
 

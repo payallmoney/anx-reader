@@ -1,3 +1,8 @@
+## 1.15.82
+- Fix(tts): Watchdog recovery resets the TTS engine before every retry and speak failures reset the engine queue instead of propagating — long-doze RangeError storms from the flutter_tts plugin no longer leave the recovery loop permanently broken
+
+- Fix(朗读): 看门狗恢复的每次重试前先复位 TTS 引擎,speak 失败也会复位引擎队列而不是继续抛出——flutter_tts 插件在长休眠后的 RangeError 风暴不会再让恢复循环永久失效
+
 ## 1.15.81
 - Fix(tts)!: Narration follow rebuilt on the v1.15.77 base with only the chapter-one fix — the follow jump now uses solely the fallback's own monotonic position (spine index + in-chapter fraction, bare-number anchor); the text-search locate (ttsLocate) is no longer used for positioning, eliminating the only path that could jump the reader back to chapter one. All recovery/watchdog behavior stays at the v1.15.77 state
 

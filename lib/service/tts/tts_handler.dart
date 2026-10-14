@@ -2,6 +2,7 @@ import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
+import 'package:anx_reader/service/tts/system_tts.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -126,6 +127,15 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await tts.speak();
     }
     AnxLog.info('TTS play: speak returned');
+  }
+
+  /// Immediate recovery attempt for the system TTS chain (screen wake
+  /// after long screen-off narration).
+  Future<void> recoverIfStalled() async {
+    final sys = tts;
+    if (sys is SystemTts) {
+      await sys.recoverIfStalled();
+    }
   }
 
   @override
