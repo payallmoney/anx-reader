@@ -186,9 +186,6 @@ class SystemTts extends BaseTts {
 
   Future<void> _recoverFromStall() async {
     try {
-      // a long doze can corrupt the engine's utterance pipeline: stop it
-      // first so the retry starts from a clean state
-      await _ignoreMissingPlugin(() => flutterTts.stop());
       final next = await getNextTextFunction();
       if (next.isEmpty) {
         updateTtsState(TtsStateEnum.stopped);
@@ -306,15 +303,7 @@ class SystemTts extends BaseTts {
     final selectedVoice = SystemTtsProvider().resolveVoice(null);
     await _applyVoice(selectedVoice);
 
-    try {
-      await flutterTts.speak(_currentVoiceText!);
-    } catch (e) {
-      // engine-level failure (corrupted utterance state after doze):
-      // reset the engine queue so the next attempt starts clean
-      AnxLog.severe('TTS speak failed, resetting engine: $e');
-      await _ignoreMissingPlugin(() => flutterTts.stop());
-      rethrow;
-    }
+    await flutterTts.speak(_currentVoiceText!);
 
     if (!isAndroid && ttsStateNotifier.value == TtsStateEnum.playing) {
       _currentVoiceText = await getNextTextFunction();

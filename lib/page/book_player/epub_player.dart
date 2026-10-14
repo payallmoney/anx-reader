@@ -151,6 +151,15 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       ''');
   }
 
+  /// Jump to a spine section at a fraction within it — the exact same
+  /// resolution foliate uses internally, no cross-measure conversion
+  void goToSectionFraction(int index, double frac) {
+    final f = frac.clamp(0.0, 1.0).toStringAsFixed(4);
+    // anchor must be a BARE NUMBER (fraction within the section) — the
+    // paginator scrolls to anchor*(pages-1); an object lands nowhere
+    webViewController
+        .execute('reader.view.goTo({ index: $index, anchor: $f })');
+  }
 
   Future<void> goToPercentage(double value) async {
     await webViewController.execute('''
@@ -374,8 +383,14 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       if (frac <= 0) return;
       percentage = frac;
       final fresh = await bookDao.selectBookById(book.id);
-      await bookDao.updateBook(
-          fresh.copyWith(readingPercentage: frac, updateTime: DateTime.now()));
+      // ALSO clear the stale webview cfi here: if the process dies during
+      // screen-off, saveReadingProgress never runs, and a non-empty cfi
+      // makes the player restore at the old page (ignoring the saved
+      // percentage) - exactly the "reopens in an earlier chapter" bug
+      await bookDao.updateBook(fresh.copyWith(
+          readingPercentage: frac,
+          lastReadPosition: '',
+          updateTime: DateTime.now()));
       // keep the shelf percentage in step with narration
       if (mounted) {
         ref.read(bookListProvider.notifier).refresh();
@@ -404,14 +419,14 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         if (_fallbackPersistCounter % 10 == 0) {
           unawaited(_persistNarrationProgress());
         }
-        // follow the narration on screen (foreground only), at most one
-        // reposition per 15s — driven by the fallback's own monotonic
-        // position, never by text search
+        // keep the visible page following the narration: jump at most once
+        // per 15s and only while the app is foregrounded (a frozen webview
+        // would queue the commands and replay them all on thaw)
         if (WidgetsBinding.instance.lifecycleState ==
                 AppLifecycleState.resumed &&
             DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
           _lastFollowNav = DateTime.now();
-          _followNarration();
+          unawaited(_followNarration());
         }
       }
       return s;
@@ -1177,54 +1192,62 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   }
 
 
-
-
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _syncReaderToNarration();
-    }
-  }
-
-  /// Wake/reopen: put the visible page at the narrated position. The jump
-  /// is driven by the fallback's own monotonic position (section index +
-  /// in-chapter fraction) — it can only move forward, so a wrong jump back
-  /// to chapter one is structurally impossible.
-  Future<void> _syncReaderToNarration() async {
-    final fallback = _dartTtsFallback;
-    if (fallback == null) return;
-    try {
-      final (sec, frac) = fallback.currentSectionPosition();
-      goToSectionFraction(sec, frac);
-      // the webview may still be thawing when the first command lands —
-      // repeat once after it has had time to resume
-      await Future<void>.delayed(const Duration(seconds: 3));
-      if (mounted) {
-        final (sec2, frac2) = fallback.currentSectionPosition();
-        goToSectionFraction(sec2, frac2);
-      }
-    } catch (e) {
-      AnxLog.warning('Narration follow failed: $e');
-    }
-  }
-
-  /// While narrating with the app foregrounded, keep the visible page on
-  /// the narrated content: at most one reposition per 15s.
-  void _followNarration() {
+  /// Make the visible page reflect the narrated position AND restore the
+  /// original progress scheme: search the current sentence to get its real
+  /// cfi, navigate + highlight — the webview then reports progress events
+  /// (onRelocated) so cfi/percentage flow naturally. Falls back to a rough
+  /// section jump when the sentence cannot be located.
+  /// Follow the narrated position. The jump uses ONLY the fallback's own
+  /// monotonic position (spine index + in-chapter fraction): it can never
+  /// move backward, so the reader can never be sent back to chapter one.
+  /// Text search is deliberately NOT used here - repeated sentences made
+  /// the search match an early occurrence, which was the chapter-one
+  /// return bug.
+  Future<void> _followNarration() async {
     final fallback = _dartTtsFallback;
     if (fallback == null) return;
     final (sec, frac) = fallback.currentSectionPosition();
     goToSectionFraction(sec, frac);
   }
 
-  /// Jump to a spine section at a fraction within it — foliate's native
-  /// resolution; the anchor must be a BARE NUMBER (fraction within the
-  /// section): an object anchor lands nowhere.
-  void goToSectionFraction(int index, double frac) {
-    final f = frac.clamp(0.0, 1.0).toStringAsFixed(4);
-    webViewController
-        .execute('reader.view.goTo({ index: $index, anchor: $f })');
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _syncReaderToNarration();
+    }
+  }
+
+  /// Screen woke up after a screen-off narration session: the Dart
+  /// fallback narrated without touching the frozen webview, so the visible
+  /// page is wherever the screen turned off. Jump the reader to the
+  /// narration position and, if narration should be running but the chain
+  /// died, restart it.
+  Future<void> _syncReaderToNarration() async {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
+    try {
+      final fraction = fallback.positionFraction;
+      if (fraction > 0 && (fraction - percentage).abs() > 0.001) {
+        AnxLog.info(
+            'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
+        await _followNarration();
+        // the webview may still be thawing when the first command lands —
+        // repeat once after it has had time to resume
+        await Future<void>.delayed(const Duration(seconds: 3));
+        if (mounted) {
+          await _followNarration();
+        }
+      }
+      final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;
+      if (!playing &&
+          TtsHandler().ttsStateNotifier.value == TtsStateEnum.paused) {
+        AnxLog.info('Screen-on: TTS paused, resuming narration');
+        await TtsHandler().play();
+      }
+    } catch (e) {
+      AnxLog.severe('Screen-on narration sync failed: $e');
+    }
   }
 
   @override

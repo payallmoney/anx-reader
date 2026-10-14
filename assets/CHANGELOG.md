@@ -1,3 +1,8 @@
+## 1.15.81
+- Fix(tts)!: Narration follow rebuilt on the v1.15.77 base with only the chapter-one fix — the follow jump now uses solely the fallback's own monotonic position (spine index + in-chapter fraction, bare-number anchor); the text-search locate (ttsLocate) is no longer used for positioning, eliminating the only path that could jump the reader back to chapter one. All recovery/watchdog behavior stays at the v1.15.77 state
+
+- Fix(朗读)!: 基于 1.15.77 代码只修"跳回第一章"一个问题——跟随跳转只使用兜底自身的单调位置(章节索引+章内比例,裸数字锚点);文本搜索定位不再用于跟随,彻底消除跳回第一章的路径
+
 ## 1.15.80
 - Fix(tts): Watchdog recovery now resets the TTS engine before retrying (flutterTts.stop + clean state) and speak failures are caught with the engine queue reset instead of leaving a corrupted utterance pipeline — targets the recurring RangeError(length) from the flutter_tts plugin seen after long doze periods, which had stalled recovery loops
 
