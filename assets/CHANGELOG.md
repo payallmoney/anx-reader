@@ -1,3 +1,8 @@
+## 1.15.78
+- Fix(tts)!: Completely removed the automatic narration-follow / position-jump machinery (added in 1.15.71-76) — it was the source of the "narration returns to chapter one" regressions. Screen-off narration now behaves predictably: it keeps reading with the screen off and saves its position to the book as it goes; the visible page simply stays where it is. When you reopen the book (or stop and reopen), it opens at the narrated position via the saved percentage. No automatic page jumps means no wrong jumps
+
+- Fix(朗读)!: 完全移除自动跟随/位置跳转机制(1.15.71-76 引入,即"回到第一章"问题的来源)。息屏朗读行为现在简单可预期:继续朗读、进度随读随存;阅读页面保持原位不动;停止后重开书籍会按已保存的百分比打开在朗读到的位置。没有自动跳转,就不会有错误跳转
+
 ## 1.15.77
 - Fix(tts): The narration-position persist also clears the stale webview cfi — previously it updated only the percentage while the old cfi stayed, so after the system killed a screen-off session the player restored from the OLD cfi (an earlier chapter position) and ignored the saved percentage. Verified: percentage and cfi now advance together during narration and reopening lands at the narrated position
 

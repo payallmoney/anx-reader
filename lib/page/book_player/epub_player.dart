@@ -82,7 +82,7 @@ class EpubPlayer extends ConsumerStatefulWidget {
 }
 
 class EpubPlayerState extends ConsumerState<EpubPlayer>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin {
   late EpubWebViewController webViewController;
   late ContextMenu contextMenu;
   String cfi = '';
@@ -151,15 +151,6 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       ''');
   }
 
-  /// Jump to a spine section at a fraction within it — the exact same
-  /// resolution foliate uses internally, no cross-measure conversion
-  void goToSectionFraction(int index, double frac) {
-    final f = frac.clamp(0.0, 1.0).toStringAsFixed(4);
-    // anchor must be a BARE NUMBER (fraction within the section) — the
-    // paginator scrolls to anchor*(pages-1); an object lands nowhere
-    webViewController
-        .execute('reader.view.goTo({ index: $index, anchor: $f })');
-  }
 
   Future<void> goToPercentage(double value) async {
     await webViewController.execute('''
@@ -374,7 +365,6 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   DartEpubTts? _dartTtsFallback;
   String? _lastTtsSentence;
   int _fallbackPersistCounter = 0;
-  DateTime _lastFollowNav = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Persist the narration position to the book record.
   Future<void> _persistNarrationProgress() async {
@@ -383,14 +373,8 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       if (frac <= 0) return;
       percentage = frac;
       final fresh = await bookDao.selectBookById(book.id);
-      // ALSO clear the stale webview cfi here: if the process dies during
-      // screen-off, saveReadingProgress never runs, and a non-empty cfi
-      // makes the player restore at the old page (ignoring the saved
-      // percentage) - exactly the "reopens in an earlier chapter" bug
-      await bookDao.updateBook(fresh.copyWith(
-          readingPercentage: frac,
-          lastReadPosition: '',
-          updateTime: DateTime.now()));
+      await bookDao.updateBook(
+          fresh.copyWith(readingPercentage: frac, updateTime: DateTime.now()));
       // keep the shelf percentage in step with narration
       if (mounted) {
         ref.read(bookListProvider.notifier).refresh();
@@ -418,15 +402,6 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         _fallbackPersistCounter++;
         if (_fallbackPersistCounter % 10 == 0) {
           unawaited(_persistNarrationProgress());
-        }
-        // keep the visible page following the narration: jump at most once
-        // per 15s and only while the app is foregrounded (a frozen webview
-        // would queue the commands and replay them all on thaw)
-        if (WidgetsBinding.instance.lifecycleState ==
-                AppLifecycleState.resumed &&
-            DateTime.now().difference(_lastFollowNav).inSeconds >= 15) {
-          _lastFollowNav = DateTime.now();
-          unawaited(_followNarration());
         }
       }
       return s;
@@ -1136,7 +1111,6 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     // pauses while this page lives (import webviews otherwise compete for
     // the main thread and make reading stutter)
     ImportReadingGate.reading = true;
-    WidgetsBinding.instance.addObserver(this);
     getThemeColor();
 
     contextMenu = ContextMenu(
@@ -1192,79 +1166,12 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   }
 
 
-  /// Make the visible page reflect the narrated position AND restore the
-  /// original progress scheme: search the current sentence to get its real
-  /// cfi, navigate + highlight — the webview then reports progress events
-  /// (onRelocated) so cfi/percentage flow naturally. Falls back to a rough
-  /// section jump when the sentence cannot be located.
-  Future<void> _followNarration() async {
-    final fallback = _dartTtsFallback;
-    if (fallback == null) return;
-    final (sec, frac) = fallback.currentSectionPosition();
-    final sentence = _lastTtsSentence;
-    if (sentence == null || sentence.trim().isEmpty) {
-      goToSectionFraction(sec, frac);
-      return;
-    }
-    try {
-      final t = jsonEncode(sentence);
-      final r = await webViewController.callAsyncJavaScript(
-        functionBody: 'return await ttsLocate($t, $sec)',
-      );
-      final cfi = _jsString(r);
-      if (cfi.isNotEmpty) {
-        await ttsHighlightByCfi(cfi);
-        goToCfi(cfi);
-        return;
-      }
-    } catch (_) {}
-    goToSectionFraction(sec, frac);
-  }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _syncReaderToNarration();
-    }
-  }
 
-  /// Screen woke up after a screen-off narration session: the Dart
-  /// fallback narrated without touching the frozen webview, so the visible
-  /// page is wherever the screen turned off. Jump the reader to the
-  /// narration position and, if narration should be running but the chain
-  /// died, restart it.
-  Future<void> _syncReaderToNarration() async {
-    final fallback = _dartTtsFallback;
-    if (fallback == null) return;
-    try {
-      final fraction = fallback.positionFraction;
-      if (fraction > 0 && (fraction - percentage).abs() > 0.001) {
-        AnxLog.info(
-            'Screen-on: syncing reader to narration position ${fraction.toStringAsFixed(3)}');
-        await _followNarration();
-        // the webview may still be thawing when the first command lands —
-        // repeat once after it has had time to resume
-        await Future<void>.delayed(const Duration(seconds: 3));
-        if (mounted) {
-          await _followNarration();
-        }
-      }
-      final playing = TtsHandler().ttsStateNotifier.value == TtsStateEnum.playing;
-      if (!playing &&
-          TtsHandler().ttsStateNotifier.value == TtsStateEnum.paused) {
-        AnxLog.info('Screen-on: TTS paused, resuming narration');
-        await TtsHandler().play();
-      }
-    } catch (e) {
-      AnxLog.severe('Screen-on narration sync failed: $e');
-    }
-  }
 
   @override
   void dispose() {
     ImportReadingGate.reading = false;
-    WidgetsBinding.instance.removeObserver(this);
     _scrollDebounceTimer?.cancel();
     _animationController?.dispose();
     saveReadingProgress();
