@@ -1,3 +1,8 @@
+## 1.15.83
+- Fix(tts)!: The narration position crash is fully fixed — DartEpubTts.positionFraction indexed the per-CHAPTER prefix-sum array with a SENTENCE index; on real books (20000 sentences vs 1861 chapters) it threw RangeError(length) on every sentence advance, killing the chain and freezing the page at an early chapter. The fraction is now computed by mapping the sentence index to its chapter and applying the in-chapter fraction — verified 5 minutes of continuous narration: percentage advances smoothly 0→0.24 across chapter boundaries with zero errors
+
+- Fix(朗读)!: 彻底修复朗读进度崩溃——DartEpubTts.positionFraction 用"句子序号"去索引"按章节"的前缀和数组;真实书籍(2 万句 vs 1861 章)必然越界抛 RangeError,每句朗读推进都会杀死朗读链并冻结页面。现在先将句子序号映射到所属章节,再应用章内比例计算百分比——已验证连续朗读 5 分钟:百分比跨章平滑推进 0→0.24,零错误
+
 ## 1.15.82
 - Fix(tts): Watchdog recovery resets the TTS engine before every retry and speak failures reset the engine queue instead of propagating — long-doze RangeError storms from the flutter_tts plugin no longer leave the recovery loop permanently broken
 

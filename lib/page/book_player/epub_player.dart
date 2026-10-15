@@ -1136,6 +1136,12 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     // pauses while this page lives (import webviews otherwise compete for
     // the main thread and make reading stutter)
     ImportReadingGate.reading = true;
+    // a fallback left over from a DIFFERENT book is stale - clear it so it
+    // can never serve the wrong book's sentences
+    if (_dartTtsFallback != null &&
+        DartEpubTts.bookPath != widget.book.fileFullPath) {
+      resetDartTtsFallback();
+    }
     WidgetsBinding.instance.addObserver(this);
     getThemeColor();
 

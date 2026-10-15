@@ -231,8 +231,18 @@ class DartEpubTts {
 
   double get positionFraction {
     if (_sentences.isEmpty || _totalChars == 0) return 0;
-    final i = _index.clamp(0, _sentences.length);
-    return (_cumChars[i] / _totalChars).clamp(0.0, 1.0);
+    // _cumChars is indexed by CHAPTER (prefix sums) — the sentence index
+    // must first be mapped to its chapter; indexing it with a SENTENCE
+    // index throws RangeError and killed narration on long real books
+    final i = _index.clamp(0, _sentences.length - 1);
+    if (i >= _sentenceSection.length || i >= _sentenceChapterFrac.length) {
+      return 1.0;
+    }
+    final sec = _sentenceSection[i].clamp(0, _cumChars.length - 2);
+    final secChars = _cumChars[sec + 1] - _cumChars[sec];
+    final inFrac = secChars > 0 ? _sentenceChapterFrac[i] : 0.0;
+    return ((_cumChars[sec] + inFrac * secChars) / _totalChars)
+        .clamp(0.0, 1.0);
   }
 
   /// Peek at upcoming sentences without advancing the cursor; used by the
@@ -266,6 +276,10 @@ class DartEpubTts {
 
   static List<String>? _cachedSentences;
   static String? _cachedBookPath;
+
+  /// The book this fallback was built for - used to detect a stale
+  /// fallback serving a DIFFERENT book (the chapter-one return bug).
+  static String? get bookPath => _cachedBookPath;
   static List<int> _cumChars = const [0];
   static int _totalChars = 0;
   static List<int> _sentenceSection = const [];

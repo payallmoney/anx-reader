@@ -196,8 +196,9 @@ class SystemTts extends BaseTts {
       _currentVoiceText = next;
       AnxLog.info('TTS watchdog: resuming with ${next.length} chars');
       await speak(content: next);
-    } catch (e) {
-      AnxLog.severe('TTS watchdog recovery failed: $e');
+    } catch (e, s) {
+      AnxLog.severe(
+          'TTS watchdog recovery failed: $e STACK: $s');
     }
   }
 
