@@ -480,6 +480,10 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     if (_dartTtsFallback == null) {
       return '';
     }
+    // the JS TTS auto-paging must stop: its independent position advances
+    // fired onRelocated with EARLY positions, overwriting the narration
+    // progress (the "position returns to chapter one" bug)
+    webViewController.execute("window.ttsStop && ttsStop()");
     final s = _dartTtsFallback!.next();
     if (s.isNotEmpty) _lastTtsSentence = s;
     return s;
@@ -836,6 +840,9 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         handlerName: 'onRelocated',
         callback: (args) {
           Map<String, dynamic> location = args[0];
+          // while the narration fallback drives, the webview position is
+          // stale/meaningless - don't let it overwrite the narrated progress
+          if (_dartTtsFallback != null) return;
           if (cfi == location['cfi']) return;
           // if (chapterHref != location['chapterHref']) {
           //   refreshToc();
