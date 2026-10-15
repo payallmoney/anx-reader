@@ -375,6 +375,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   String? _lastTtsSentence;
   int _fallbackPersistCounter = 0;
   DateTime _lastFollowNav = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime? _screenOffAt;
 
   /// Persist the narration position to the book record.
   Future<void> _persistNarrationProgress() async {
@@ -1238,11 +1239,24 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _screenOffAt ??= DateTime.now();
+      return;
+    }
     if (state == AppLifecycleState.resumed) {
+      // the webview froze during screen-off (long doze kills the renderer):
+      // RELOAD it - a dead webview ignores every JS command, only a reload
+      // can bring it back. After reload, the onLoadEnd handler jumps to the
+      // persisted narrated position.
+      final wasOff = _screenOffAt != null &&
+          DateTime.now().difference(_screenOffAt!).inSeconds > 30;
+      _screenOffAt = null;
       _syncReaderToNarration();
-      // immediate recovery attempt: don't wait for the 30s watchdog after
-      // a long doze
       TtsHandler().recoverIfStalled();
+      if (wasOff && _dartTtsFallback != null) {
+        webViewController.execute('location.reload()');
+      }
     }
   }
 
