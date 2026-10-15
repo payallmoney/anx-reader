@@ -378,18 +378,24 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   /// Persist the narration position to the book record.
   Future<void> _persistNarrationProgress() async {
+    final fallback = _dartTtsFallback;
+    if (fallback == null) return;
     try {
-      final frac = _dartTtsFallback?.positionFraction ?? 0;
+      final frac = fallback.positionFraction;
       if (frac <= 0) return;
       percentage = frac;
+      final (sec, inFrac) = fallback.currentSectionPosition();
       final fresh = await bookDao.selectBookById(book.id);
       // ALSO clear the stale webview cfi here: if the process dies during
       // screen-off, saveReadingProgress never runs, and a non-empty cfi
       // makes the player restore at the old page (ignoring the saved
-      // percentage) - exactly the "reopens in an earlier chapter" bug
+      // percentage) - exactly the "reopens in an earlier chapter" bug.
+      // The EXACT narrated position (section + in-chapter fraction) is
+      // stored in lastReadPosition so reopen restores precisely, with no
+      // weighting conversion
       await bookDao.updateBook(fresh.copyWith(
           readingPercentage: frac,
-          lastReadPosition: '',
+          lastReadPosition: 'dart-tts://$sec:$inFrac',
           updateTime: DateTime.now()));
       // keep the shelf percentage in step with narration
       if (mounted) {
@@ -416,7 +422,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         // where the screen turned off even after hours of narration
         percentage = _dartTtsFallback!.positionFraction;
         _fallbackPersistCounter++;
-        if (_fallbackPersistCounter % 10 == 0) {
+        if (_fallbackPersistCounter % 3 == 0) {
           unawaited(_persistNarrationProgress());
         }
         // keep the visible page following the narration: jump at most once
@@ -826,10 +832,16 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     controller.addJavaScriptHandler(
         handlerName: 'onLoadEnd',
         callback: (args) {
-          // narration-progress saves clear lastReadPosition (the webview
-          // cfi is stale); an empty cfi makes the JS open() start at the
-          // first line — restore by the saved percentage here instead
-          if ((widget.cfi ?? widget.book.lastReadPosition).isEmpty &&
+          // narration-progress saves store the exact narrated position in
+          // lastReadPosition as a dart-tts:// marker: restore by section +
+          // in-chapter fraction (exact, no weighting conversion)
+          final savedPos = widget.book.lastReadPosition;
+          if (savedPos.startsWith('dart-tts://')) {
+            final parts = savedPos.substring('dart-tts://'.length).split(':');
+            final sec = int.tryParse(parts[0]) ?? 0;
+            final frac = double.tryParse(parts[1]) ?? 0;
+            goToSectionFraction(sec, frac);
+          } else if ((widget.cfi ?? widget.book.lastReadPosition).isEmpty &&
               widget.book.readingPercentage > 0) {
             goToPercentage(widget.book.readingPercentage);
           }
