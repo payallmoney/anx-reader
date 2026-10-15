@@ -355,10 +355,12 @@ class SystemTts extends BaseTts {
       updateTtsState(TtsStateEnum.paused);
       return;
     }
-    final result = await _ignoreMissingPlugin(() => flutterTts.stop());
-    if (result == 1) {
-      updateTtsState(TtsStateEnum.paused);
-    }
+    // plugin pause first (marks the utterance paused engine-side), then
+    // stop as the hard fallback; the state flips regardless so the
+    // notification's continue button always works
+    await _ignoreMissingPlugin(() => flutterTts.pause());
+    await _ignoreMissingPlugin(() => flutterTts.stop());
+    updateTtsState(TtsStateEnum.paused);
   }
 
   @override
@@ -367,11 +369,9 @@ class SystemTts extends BaseTts {
       return;
     }
     _startWatchdog();
-    if (isAndroid) {
-      speak(content: _prevVoiceText);
-      return;
-    }
-    speak(content: _currentVoiceText);
+    // re-speak the last served sentence; if the engine died during the
+    // pause, speak() resets it and the watchdog retries
+    await speak(content: _prevVoiceText ?? _currentVoiceText);
   }
 
   @override
