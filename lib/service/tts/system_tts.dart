@@ -108,7 +108,20 @@ class SystemTts extends BaseTts {
 
     flutterTts.setErrorHandler((msg) {
       AnxLog.severe('TTS engine error: $msg');
-      _petWatchdog();
+      // engine errors mean the utterance was NOT read: petting the
+      // watchdog here hid the stall, and the completion chain raced
+      // through the book without audio. Feed the stall watchdog instead
+      // so it can recover, and stop after an error storm.
+      final now = DateTime.now();
+      _recentEngineErrors.removeWhere((t) => now.difference(t).inSeconds > 15);
+      _recentEngineErrors.add(now);
+      if (_recentEngineErrors.length >= 3) {
+        AnxLog.severe('TTS engine error storm - stopping narration');
+        _recentEngineErrors.clear();
+        updateTtsState(TtsStateEnum.stopped);
+        _stopWatchdog();
+        return;
+      }
     });
 
     // utterance progress ticks keep the watchdog fed while a long
@@ -160,6 +173,7 @@ class SystemTts extends BaseTts {
   // emulators.
   Timer? _watchdog;
   DateTime _lastUtteranceEvent = DateTime.now();
+  final List<DateTime> _recentEngineErrors = [];
 
   void _petWatchdog() {
     _lastUtteranceEvent = DateTime.now();
